@@ -13,7 +13,7 @@ Sistema contable con **facturación electrónica masiva conectada a Siigo Nube**
 
 ## Stack
 
-Next.js 16 (App Router, Server Actions) · Auth.js v5 (Google) · Drizzle ORM · PostgreSQL (o PGlite embebido en desarrollo) · Tailwind CSS 4 · Vitest.
+Next.js 16 (App Router, Server Actions) en Cloudflare Workers (OpenNext) · Auth.js v5 (Google) · Drizzle ORM · PostgreSQL (o PGlite embebido en desarrollo) · Tailwind CSS 4 · Vitest.
 
 ## Arranque local
 
@@ -69,22 +69,43 @@ factura tiene error, esa factura completa se rechaza y se muestra el motivo; el 
 - Errores temporales (429/5xx) se reintentan hasta 3 veces; los errores de datos quedan marcados con el mensaje de Siigo.
 - Si un envío se interrumpe a mitad, la factura queda en *error – estado incierto* para verificarla en Siigo antes de reintentar.
 
-## Despliegue (Vercel + Neon, dominio en Cloudflare)
+## Despliegue en Cloudflare Workers (dominio en Cloudflare)
 
-1. **Base de datos:** crea un proyecto en [Neon](https://neon.tech) y copia la *connection string* (pooled).
-2. **Vercel:** importa el repositorio `jero-app`. Las migraciones corren solas en cada despliegue (`vercel-build`).
-   Variables: `DATABASE_URL`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `ADMIN_EMAILS`,
-   `REQUIRE_APPROVAL=true`, `ENCRYPTION_KEY` (`openssl rand -base64 32`), `SIIGO_MOCK=false`.
-3. **Dominio:** en Vercel → *Settings → Domains* agrega `app.tudominio.com`. En Cloudflare → *DNS* crea
-   `CNAME app → cname.vercel-dns.com` con el proxy **desactivado (nube gris, "DNS only")**.
-   Para el dominio raíz usa el registro `A @ → 76.76.21.21` (o el valor que muestre Vercel), también en gris.
-4. **Google:** en el cliente OAuth agrega el origen `https://app.tudominio.com` y la redirección
-   `https://app.tudominio.com/api/auth/callback/google`.
-5. Entra con el correo de `ADMIN_EMAILS` y configura Siigo en *Admin → Conexión Siigo*.
+La app corre en Cloudflare Workers con [OpenNext](https://opennext.js.org/cloudflare). El Worker pesa ~2 MB comprimido
+(cabe en el plan gratis; para muchos usuarios o lotes grandes conviene Workers Paid, USD 5/mes, por los límites de CPU).
+La base de datos es Postgres externo (recomendado: [Neon](https://neon.tech), plan gratis) conectado vía **Hyperdrive**.
+
+1. **Base de datos:** crea un proyecto en Neon y copia la *connection string* **directa** (sin `-pooler`).
+   Aplica las migraciones desde tu PC:
+   ```bash
+   DATABASE_URL="postgres://...neon.tech/neondb?sslmode=require" npm run db:migrate
+   ```
+2. **Hyperdrive:** `npx wrangler login` y luego
+   ```bash
+   npx wrangler hyperdrive create jero-db --connection-string="postgres://...neon.tech/neondb?sslmode=require"
+   ```
+   Pega el `id` en `wrangler.jsonc` (descomenta el bloque `hyperdrive`).
+   *(Alternativa sin Hyperdrive: `npx wrangler secret put DATABASE_URL`.)*
+3. **Dominio:** en `wrangler.jsonc` descomenta `routes` con tu subdominio (`app.tudominio.com`). Cloudflare crea el DNS y el SSL solo.
+4. **Secretos** (uno por uno, te pide el valor):
+   ```bash
+   npx wrangler secret put AUTH_SECRET          # openssl rand -base64 32
+   npx wrangler secret put ENCRYPTION_KEY       # openssl rand -base64 32 (distinto)
+   npx wrangler secret put AUTH_GOOGLE_ID
+   npx wrangler secret put AUTH_GOOGLE_SECRET
+   npx wrangler secret put ADMIN_EMAILS
+   ```
+5. **Desplegar:** `npm run deploy`.
+   O desde el panel: *Workers & Pages → Create → Import a repository*, comando de build
+   `npx opennextjs-cloudflare build` y de deploy `npx opennextjs-cloudflare deploy` (despliega en cada push).
+6. **Google:** origen `https://app.tudominio.com` y redirección `https://app.tudominio.com/api/auth/callback/google`.
+
+Probar el Worker localmente: crea `.dev.vars` con las mismas variables (incluida `DATABASE_URL`) y ejecuta `npm run preview`.
+Cada vez que cambie `src/db/schema.ts`: `npm run db:generate` y vuelve a correr `npm run db:migrate` contra Neon.
 
 ## Scripts
 
-`npm run dev` · `npm run build` · `npm test` · `npm run lint` (typecheck) · `npm run db:generate` (tras cambiar `src/db/schema.ts`) · `npm run db:migrate`
+`npm run dev` · `npm run preview` (Worker local) · `npm run deploy` (Cloudflare) · `npm test` · `npm run lint` (typecheck) · `npm run db:generate` (tras cambiar `src/db/schema.ts`) · `npm run db:migrate`
 
 ## Pendiente de confirmar con la documentación oficial de Siigo
 

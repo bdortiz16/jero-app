@@ -1,0 +1,31 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "jero",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "assets": {
+    "directory": ".open-next/assets",
+    "binding": "ASSETS"
+  },
+  "services": [
+    // Autorreferencia que usa OpenNext; el nombre debe coincidir con "name"
+    { "binding": "WORKER_SELF_REFERENCE", "service": "jero" }
+  ],
+  "observability": { "enabled": true },
+  // Tu dominio (debe estar en la misma cuenta de Cloudflare). Cambia app.tudominio.com:
+  // "routes": [{ "pattern": "app.tudominio.com", "custom_domain": true }],
+
+  // Conexión a Postgres a través de Hyperdrive (recomendado). Crea la config con:
+  //   npx wrangler hyperdrive create jero-db --connection-string="postgres://..."
+  // y pega aquí el id que te devuelve:
+  // "hyperdrive": [{ "binding": "HYPERDRIVE", "id": "<ID_DE_HYPERDRIVE>" }],
+
+  // Variables no secretas. Los secretos se cargan con: npx wrangler secret put NOMBRE
+  "vars": {
+    "AUTH_TRUST_HOST": "true",
+    "REQUIRE_APPROVAL": "true",
+    "SIIGO_MOCK": "false",
+    "SIIGO_API_URL": "https://api.siigo.com"
+  }
+}

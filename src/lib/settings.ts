@@ -47,11 +47,11 @@ export const DEFAULTS: SiigoDefaults = {
 export async function getSiigoCredentials(): Promise<SiigoCredentials | null> {
   const stored = await getSetting<{ username: string; accessKey: string; partnerId: string }>("siigo:credentials");
   if (!stored) return null;
-  return { ...stored, accessKey: decrypt(stored.accessKey) };
+  return { ...stored, accessKey: await decrypt(stored.accessKey) };
 }
 
 export async function saveSiigoCredentials(c: SiigoCredentials) {
-  await setSetting("siigo:credentials", { ...c, accessKey: encrypt(c.accessKey) });
+  await setSetting("siigo:credentials", { ...c, accessKey: await encrypt(c.accessKey) });
   await setSetting("siigo:token", null);
 }
 

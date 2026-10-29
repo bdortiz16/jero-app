@@ -8,8 +8,8 @@ export async function parseFile(name: string, data: ArrayBuffer): Promise<RawRow
   const lower = name.toLowerCase();
   let matrix: unknown[][];
   if (lower.endsWith(".xlsx")) {
-    const { readSheet } = await import("read-excel-file/node");
-    matrix = (await readSheet(Buffer.from(data))) as unknown[][];
+    const { readSheet } = await import("read-excel-file/universal");
+    matrix = (await readSheet(data)) as unknown[][];
   } else if (lower.endsWith(".csv") || lower.endsWith(".txt")) {
     const text = new TextDecoder("utf-8").decode(data).replace(/^\uFEFF/, "");
     const firstLine = text.split(/\r?\n/, 1)[0] ?? "";

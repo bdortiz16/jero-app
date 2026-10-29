@@ -1,46 +1,63 @@
 import "server-only";
 import { drizzle as drizzlePostgres } from "drizzle-orm/postgres-js";
-import { drizzle as drizzlePglite } from "drizzle-orm/pglite";
-import { migrate as migratePglite } from "drizzle-orm/pglite/migrator";
-import { PGlite } from "@electric-sql/pglite";
 import postgres from "postgres";
-import path from "node:path";
-import { mkdirSync } from "node:fs";
 import * as schema from "./schema";
 
 type DB = ReturnType<typeof drizzlePostgres<typeof schema>>;
 
+const isWorkers = typeof navigator !== "undefined" && navigator.userAgent === "Cloudflare-Workers";
+
 const globalForDb = globalThis as unknown as { __jeroDb?: DB; __jeroDbReady?: Promise<void> };
 
-function create(): { db: DB; ready: Promise<void> } {
+// En Cloudflare Workers un socket no puede reutilizarse entre peticiones:
+// se abre una conexión por petición (una por ExecutionContext).
+const perRequest = new WeakMap<object, DB>();
+
+async function workersDb(): Promise<DB> {
+  const { getCloudflareContext } = await import("@opennextjs/cloudflare");
+  const { env, ctx } = await getCloudflareContext({ async: true });
+  const cached = perRequest.get(ctx);
+  if (cached) return cached;
+  // Hyperdrive (recomendado) o conexión directa a Postgres/Neon.
+  const url = (env as { HYPERDRIVE?: { connectionString: string } }).HYPERDRIVE?.connectionString ?? process.env.DATABASE_URL;
+  if (!url) throw new Error("Falta la base de datos: configura Hyperdrive (binding HYPERDRIVE) o el secreto DATABASE_URL.");
+  const db = drizzlePostgres(postgres(url, { max: 1, prepare: false, fetch_types: false }), { schema });
+  perRequest.set(ctx, db);
+  return db;
+}
+
+async function createLocal(): Promise<{ db: DB; ready: Promise<void> }> {
   if (process.env.DATABASE_URL) {
     const client = postgres(process.env.DATABASE_URL, { max: 5, prepare: false });
     return { db: drizzlePostgres(client, { schema }), ready: Promise.resolve() };
   }
-  if (process.env.NODE_ENV === "production" && process.env.VERCEL) {
-    throw new Error("Falta DATABASE_URL: configura la base Postgres (Neon) en las variables de entorno de Vercel.");
-  }
   // Desarrollo: Postgres embebido en ./.data, migrado automáticamente.
+  const [{ PGlite }, { drizzle: drizzlePglite }, { migrate }, path, fs] = await Promise.all([
+    import("@electric-sql/pglite"),
+    import("drizzle-orm/pglite"),
+    import("drizzle-orm/pglite/migrator"),
+    import("node:path"),
+    import("node:fs"),
+  ]);
   const dir = path.join(process.cwd(), ".data", "pglite");
-  mkdirSync(dir, { recursive: true });
-  const client = new PGlite(dir);
-  const db = drizzlePglite(client, { schema });
-  const ready = migratePglite(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
+  fs.mkdirSync(dir, { recursive: true });
+  const db = drizzlePglite(new PGlite(dir), { schema });
+  const ready = migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") });
   return { db: db as unknown as DB, ready };
 }
 
-/** Devuelve la conexión (creada al primer uso); con la base local espera a que esté migrada. */
+/** Devuelve la conexión a la base de datos (con la base local, espera a que esté migrada). */
 export async function getDb(): Promise<DB> {
-  if (!globalForDb.__jeroDb) {
-    const { db, ready } = create();
+  if (isWorkers) return workersDb();
+  globalForDb.__jeroDbReady ??= createLocal().then(({ db, ready }) => {
     globalForDb.__jeroDb = db;
-    globalForDb.__jeroDbReady = ready;
-  }
+    return ready;
+  });
   try {
     await globalForDb.__jeroDbReady;
   } catch (e) {
-    // Permite reintentar en la siguiente petición si la migración falló.
-    globalForDb.__jeroDb = undefined;
+    // Permite reintentar en la siguiente petición si la conexión o migración falló.
+    globalForDb.__jeroDbReady = undefined;
     throw e;
   }
   return globalForDb.__jeroDb!;

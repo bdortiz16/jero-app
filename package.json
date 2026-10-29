@@ -11,10 +11,13 @@
     "test": "vitest run",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.mts",
-    "vercel-build": "npm run db:migrate && next build"
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.13",
+    "@opennextjs/cloudflare": "^1.20.14",
     "drizzle-orm": "^0.45.4",
     "next": "^16.4.3",
     "next-auth": "^5.0.0-beta.32",
@@ -37,6 +40,7 @@
     "tailwindcss": "^4.3.3",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
-    "vitest": "^5.0.5"
+    "vitest": "^5.0.5",
+    "wrangler": "^4.155.0"
   }
 }
