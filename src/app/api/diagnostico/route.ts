@@ -12,7 +12,7 @@ export async function GET() {
     AUTH_GOOGLE_SECRET: env.AUTH_GOOGLE_SECRET ? "ok" : "FALTA",
     ENCRYPTION_KEY: encKey === 32 ? "ok" : encKey ? "debe ser 32 bytes en base64 (openssl rand -base64 32)" : "FALTA",
     ADMIN_EMAILS: env.ADMIN_EMAILS ? "ok" : "FALTA",
-    AUTH_TRUST_HOST: env.AUTH_TRUST_HOST === "true" ? "ok" : "debe ser true",
+    AUTH_TRUST_HOST: env.AUTH_TRUST_HOST === "true" || env.VERCEL ? "ok" : "debe ser true",
   };
   try {
     const db = await getDb();
@@ -24,7 +24,9 @@ export async function GET() {
       ? "conecta, pero faltan las tablas: corre npm run db:migrate con la URL de Neon"
       : /Falta la base de datos/.test(msg)
         ? "FALTA: configura Hyperdrive en wrangler.jsonc o el secreto DATABASE_URL"
-        : `error de conexión: ${msg.replace(/postgres(ql)?:\/\/\S+/g, "[url]").slice(0, 200)}`;
+        : /Tenant or user not found|password authentication failed/.test(msg)
+          ? "usuario o contraseña de la base incorrectos: revisa la contraseña en DATABASE_URL"
+          : `error de conexión: ${msg.replace(/postgres(ql)?:\/\/\S+/g, "[url]").slice(0, 200)}`;
   }
   const ok = Object.values(checks).every((v) => v === "ok");
   return Response.json({ ok, checks }, { status: ok ? 200 : 500 });

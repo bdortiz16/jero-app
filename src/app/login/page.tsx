@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth, signIn, devLoginEnabled } from "@/auth";
 import { Alert, Logo } from "@/components/ui";
@@ -17,9 +18,12 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
 
   return (
     <div className="grid min-h-screen place-items-center bg-slate-50 px-4">
-      <div className="card w-full max-w-sm space-y-6 p-8">
+      <div className="relative card w-full max-w-sm space-y-6 p-8">
+        <Link href="/" aria-label="Volver al inicio" className="absolute top-3 right-3 grid h-8 w-8 place-items-center rounded-full text-xl text-slate-400 hover:bg-slate-100 hover:text-slate-700">
+          ×
+        </Link>
         <div className="text-center">
-          <Logo className="text-2xl" />
+          <Link href="/"><Logo className="text-2xl" /></Link>
           <p className="mt-3 text-sm text-slate-500">Ingresa para gestionar tu facturación</p>
         </div>
         {error && <Alert kind="error">{errors[error] ?? "No fue posible iniciar sesión. Intenta de nuevo."}</Alert>}
@@ -33,6 +37,9 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
             <GoogleIcon /> Continuar con Google
           </button>
         </form>
+        <div className="text-center">
+          <Link href="/" className="text-sm text-slate-500 hover:text-slate-800 hover:underline">← Volver al inicio</Link>
+        </div>
         {devLoginEnabled && (
           <form
             className="space-y-2 border-t border-slate-200 pt-4"

@@ -28,8 +28,11 @@ async function workersDb(): Promise<DB> {
 
 async function createLocal(): Promise<{ db: DB; ready: Promise<void> }> {
   if (process.env.DATABASE_URL) {
-    const client = postgres(process.env.DATABASE_URL, { max: 5, prepare: false });
+    const client = postgres(process.env.DATABASE_URL, { max: process.env.VERCEL ? 1 : 5, prepare: false });
     return { db: drizzlePostgres(client, { schema }), ready: Promise.resolve() };
+  }
+  if (process.env.VERCEL) {
+    throw new Error("Falta la base de datos: agrega DATABASE_URL (Supabase) en las variables de entorno de Vercel.");
   }
   // Desarrollo: Postgres embebido en ./.data, migrado automáticamente.
   const [{ PGlite }, { drizzle: drizzlePglite }, { migrate }, path, fs] = await Promise.all([
