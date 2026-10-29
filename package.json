@@ -19,9 +19,10 @@
   "dependencies": {
     "@electric-sql/pglite": "^0.5.13",
     "@opennextjs/cloudflare": "^1.20.14",
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.118.0",
     "drizzle-orm": "^0.45.4",
     "next": "^16.4.3",
-    "next-auth": "^5.0.0-beta.32",
     "papaparse": "^5.7.0",
     "postgres": "^3.4.9",
     "react": "^19.3.1",

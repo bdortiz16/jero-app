@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { signOut } from "@/auth";
+import { signOutAction } from "@/app/login/actions";
 import { requireUser } from "@/lib/session";
 import { Nav } from "@/components/nav";
 import { Logo } from "@/components/ui";
@@ -55,7 +55,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               <div className="text-xs text-brand-100/70">{roleLabel[user.role]}</div>
             </div>
           </div>
-          <form action={async () => { "use server"; await signOut({ redirectTo: "/" }); }}>
+          <form action={signOutAction}>
             <button className="mt-3 w-full rounded-lg px-3 py-2 text-left text-sm text-brand-100 hover:bg-white/10">Cerrar sesión</button>
           </form>
         </div>

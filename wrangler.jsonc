@@ -23,7 +23,6 @@
 
   // Variables no secretas. Los secretos se cargan con: npx wrangler secret put NOMBRE
   "vars": {
-    "AUTH_TRUST_HOST": "true",
     "REQUIRE_APPROVAL": "true",
     "SIIGO_MOCK": "false",
     "SIIGO_API_URL": "https://api.siigo.com"

@@ -1,4 +1,4 @@
-import { auth } from "@/auth";
+import { getSessionUser } from "@/lib/auth";
 import { salesLedger } from "@/lib/reports";
 
 const csvCell = (v: unknown) => {
@@ -9,8 +9,8 @@ const csvCell = (v: unknown) => {
 };
 
 export async function GET(req: Request) {
-  const session = await auth();
-  if (!session?.user || session.user.status !== "active") return new Response("No autorizado", { status: 403 });
+  const user = await getSessionUser();
+  if (!user || user.status !== "active") return new Response("No autorizado", { status: 403 });
   const url = new URL(req.url);
   const from = url.searchParams.get("desde") ?? "2000-01-01";
   const to = url.searchParams.get("hasta") ?? "2999-12-31";

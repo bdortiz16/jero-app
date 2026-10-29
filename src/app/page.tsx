@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { auth } from "@/auth";
+import { getAuthEmail } from "@/lib/auth";
 import { Logo } from "@/components/ui";
 
 const features = [
@@ -7,12 +7,12 @@ const features = [
   { title: "Conectado a Siigo", text: "Clientes, productos, impuestos y formas de pago se sincronizan desde tu cuenta de Siigo Nube. La DIAN recibe las facturas desde Siigo." },
   { title: "Control y trazabilidad", text: "Estado de cada factura (emitida, con error, pendiente), reintentos seguros y bitácora de quién hizo qué." },
   { title: "Reportes contables", text: "Libro de ventas, IVA generado, retenciones y cartera por cliente, exportables a Excel." },
-  { title: "Equipo con roles", text: "Inicia sesión con Google. El administrador aprueba usuarios y define quién puede emitir." },
+  { title: "Equipo con roles", text: "Cada persona entra con su correo y contraseña. El administrador aprueba usuarios y define quién puede emitir." },
   { title: "Seguro", text: "Credenciales de Siigo cifradas, acceso solo para usuarios aprobados y envíos sin duplicados." },
 ];
 
 export default async function Home() {
-  const session = await auth();
+  const email = await getAuthEmail().catch(() => null);
   return (
     <div className="min-h-screen bg-white">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
@@ -20,7 +20,7 @@ export default async function Home() {
         <nav className="flex items-center gap-3">
           <a href="#funciones" className="hidden text-sm text-slate-600 hover:text-slate-900 sm:block">Funciones</a>
           <a href="#como" className="hidden text-sm text-slate-600 hover:text-slate-900 sm:block">Cómo funciona</a>
-          {session?.user ? (
+          {email ? (
             <Link href="/app" className="btn-primary">Ir a la app</Link>
           ) : (
             <Link href="/login" className="btn-primary">Iniciar sesión</Link>
@@ -38,7 +38,7 @@ export default async function Home() {
           con reportes listos para tu contador.
         </p>
         <div className="mt-10 flex justify-center gap-3">
-          <Link href="/login" className="btn-primary px-6 py-3 text-base">Empezar con Google</Link>
+          <Link href="/login" className="btn-primary px-6 py-3 text-base">Empezar ahora</Link>
           <a href="#como" className="btn-secondary px-6 py-3 text-base">Ver cómo funciona</a>
         </div>
       </section>

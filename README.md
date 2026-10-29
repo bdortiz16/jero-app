@@ -2,7 +2,7 @@
 
 Sistema contable con **facturación electrónica masiva conectada a Siigo Nube**.
 
-- Página web pública (landing) + inicio de sesión con **Google**.
+- Página web pública (landing) + inicio de sesión con **correo y contraseña** (Supabase Auth): registro con confirmación por correo y recuperación de contraseña.
 - Roles: **Administrador** (todo + conexión Siigo + usuarios), **Contador** (emite y sincroniza), **Consulta** (solo lectura).
   Los usuarios nuevos quedan *pendientes* hasta que un admin los apruebe (`REQUIRE_APPROVAL`).
 - **Facturación masiva**: sube un `.xlsx`/`.csv` (una fila por ítem), Jero valida y calcula totales, y tras confirmar
@@ -13,7 +13,7 @@ Sistema contable con **facturación electrónica masiva conectada a Siigo Nube**
 
 ## Stack
 
-Next.js 16 (App Router, Server Actions) en Cloudflare Workers (OpenNext) · Auth.js v5 (Google) · Drizzle ORM · PostgreSQL (o PGlite embebido en desarrollo) · Tailwind CSS 4 · Vitest.
+Next.js 16 (App Router, Server Actions) en Cloudflare Workers (OpenNext) · Supabase Auth (correo) · Drizzle ORM · PostgreSQL (o PGlite embebido en desarrollo) · Tailwind CSS 4 · Vitest.
 
 ## Arranque local
 
@@ -24,14 +24,19 @@ npm run dev
 ```
 
 Sin `DATABASE_URL` se usa una base Postgres embebida en `./.data` que se migra sola.
-Para probar sin Google ni Siigo: `DEV_LOGIN=true` y `SIIGO_MOCK=true` en `.env.local` (solo en desarrollo).
+Para probar sin Supabase ni Siigo: `DEV_LOGIN=true` y `SIIGO_MOCK=true` en `.env.local` (solo en desarrollo).
 
-### Google OAuth
+### Inicio de sesión (Supabase Auth, correo y contraseña)
 
-1. Google Cloud Console → *APIs y servicios* → *Credenciales* → *Crear ID de cliente OAuth* (Aplicación web).
-2. URI de redirección autorizado: `http://localhost:3000/api/auth/callback/google` y `https://TU-DOMINIO/api/auth/callback/google`.
-3. Copia el ID y el secreto a `AUTH_GOOGLE_ID` y `AUTH_GOOGLE_SECRET`. Genera `AUTH_SECRET` con `npx auth secret`.
-4. Pon tu correo en `ADMIN_EMAILS` para ser administrador (el primer usuario que entra también queda como admin).
+1. Supabase → *Authentication → Sign In / Providers*: **Email** activado (Google no se usa).
+2. Supabase → *Authentication → URL Configuration*: **Site URL** = `https://TU-DOMINIO` y en **Redirect URLs** agrega
+   `https://TU-DOMINIO/auth/callback` (y `http://localhost:3000/auth/callback` para desarrollo).
+3. Supabase → *Project Settings → API*: copia **Project URL** a `SUPABASE_URL` y la **anon public key** a `SUPABASE_ANON_KEY`.
+4. Pon tu correo en `ADMIN_EMAILS`: al crear tu cuenta quedas como administrador (el primer usuario también).
+   Los demás quedan *pendientes* hasta que los apruebes en *Admin → Usuarios*.
+
+El correo integrado de Supabase permite pocos envíos por hora; para muchos usuarios configura SMTP propio en
+*Authentication → Emails → SMTP Settings*.
 
 ### Siigo
 
@@ -89,16 +94,17 @@ La base de datos es Postgres externo (recomendado: [Neon](https://neon.tech), pl
 3. **Dominio:** en `wrangler.jsonc` descomenta `routes` con tu subdominio (`app.tudominio.com`). Cloudflare crea el DNS y el SSL solo.
 4. **Secretos** (uno por uno, te pide el valor):
    ```bash
-   npx wrangler secret put AUTH_SECRET          # openssl rand -base64 32
-   npx wrangler secret put ENCRYPTION_KEY       # openssl rand -base64 32 (distinto)
-   npx wrangler secret put AUTH_GOOGLE_ID
-   npx wrangler secret put AUTH_GOOGLE_SECRET
+   npx wrangler secret put ENCRYPTION_KEY       # openssl rand -base64 32
+   npx wrangler secret put SUPABASE_URL
+   npx wrangler secret put SUPABASE_ANON_KEY
+   npx wrangler secret put SITE_URL             # https://app.tudominio.com
    npx wrangler secret put ADMIN_EMAILS
    ```
 5. **Desplegar:** `npm run deploy`.
    O desde el panel: *Workers & Pages → Create → Import a repository*, comando de build
    `npx opennextjs-cloudflare build` y de deploy `npx opennextjs-cloudflare deploy` (despliega en cada push).
-6. **Google:** origen `https://app.tudominio.com` y redirección `https://app.tudominio.com/api/auth/callback/google`.
+6. **Supabase:** agrega `https://app.tudominio.com/auth/callback` en *Authentication → URL Configuration*.
+   Nota: en Workers el `proxy.ts` (renovación de sesión) usa soporte experimental de OpenNext.
 
 Probar el Worker localmente: crea `.dev.vars` con las mismas variables (incluida `DATABASE_URL`) y ejecuta `npm run preview`.
 Cada vez que cambie `src/db/schema.ts`: `npm run db:generate` y vuelve a correr `npm run db:migrate` contra Neon.

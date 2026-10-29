@@ -1,14 +1,13 @@
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
-import { auth } from "@/auth";
+import { getSessionUser } from "@/lib/auth";
 import { getDb, schema } from "@/db";
 import { processBatchChunk } from "@/lib/batch/process";
 
 export const maxDuration = 60;
 
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
-  const session = await auth();
-  const u = session?.user;
+  const u = await getSessionUser();
   if (!u || u.status !== "active" || !["ADMIN", "CONTADOR"].includes(u.role)) {
     return NextResponse.json({ error: "No autorizado" }, { status: 403 });
   }

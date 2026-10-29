@@ -1,18 +1,17 @@
 import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
+import { supabaseConfig } from "@/lib/supabase/config";
 
 // Revisa la configuración del despliegue sin revelar valores: solo indica qué falta.
 export async function GET() {
   const env = process.env;
-  const secret = env.AUTH_SECRET ?? "";
+  const supa = supabaseConfig();
   const encKey = env.ENCRYPTION_KEY ? Buffer.from(env.ENCRYPTION_KEY, "base64").length : 0;
   const checks: Record<string, string> = {
-    AUTH_SECRET: secret.length >= 32 ? "ok" : secret ? "muy corto (usa openssl rand -base64 32)" : "FALTA",
-    AUTH_GOOGLE_ID: !env.AUTH_GOOGLE_ID ? "FALTA" : env.AUTH_GOOGLE_ID.endsWith(".apps.googleusercontent.com") ? "ok" : "no parece un Client ID de Google (debe terminar en .apps.googleusercontent.com)",
-    AUTH_GOOGLE_SECRET: env.AUTH_GOOGLE_SECRET ? "ok" : "FALTA",
+    SUPABASE_URL: !supa ? "FALTA (SUPABASE_URL o NEXT_PUBLIC_SUPABASE_URL)" : /^https:\/\/.+\.supabase\.co\/?$/.test(supa.url) ? "ok" : "no parece una URL de Supabase (https://xxxx.supabase.co)",
+    SUPABASE_ANON_KEY: supa ? "ok" : "FALTA (SUPABASE_ANON_KEY o NEXT_PUBLIC_SUPABASE_ANON_KEY)",
     ENCRYPTION_KEY: encKey === 32 ? "ok" : encKey ? "debe ser 32 bytes en base64 (openssl rand -base64 32)" : "FALTA",
     ADMIN_EMAILS: env.ADMIN_EMAILS ? "ok" : "FALTA",
-    AUTH_TRUST_HOST: env.AUTH_TRUST_HOST === "true" || env.VERCEL ? "ok" : "debe ser true",
   };
   try {
     const db = await getDb();

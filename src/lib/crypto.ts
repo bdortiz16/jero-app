@@ -19,8 +19,8 @@ function key(): Promise<CryptoKey> {
       if (process.env.NODE_ENV === "production") {
         throw new Error("ENCRYPTION_KEY debe ser 32 bytes en base64 (openssl rand -base64 32)");
       }
-      // En desarrollo derivamos una llave de AUTH_SECRET para no bloquear el arranque.
-      const seed = new TextEncoder().encode(process.env.AUTH_SECRET ?? "jero-dev");
+      // En desarrollo usamos una llave fija para no bloquear el arranque.
+      const seed = new TextEncoder().encode("jero-dev-only-key");
       raw = new Uint8Array(await crypto.subtle.digest("SHA-256", seed));
     }
     return crypto.subtle.importKey("raw", raw, "AES-GCM", false, ["encrypt", "decrypt"]);
