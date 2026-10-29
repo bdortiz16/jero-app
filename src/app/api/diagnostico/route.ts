@@ -22,11 +22,17 @@ export async function GET() {
     checks.base_de_datos = /relation "users" does not exist/.test(msg)
       ? "conecta, pero faltan las tablas: corre npm run db:migrate con la URL de Neon"
       : /Falta la base de datos/.test(msg)
-        ? "FALTA: configura Hyperdrive en wrangler.jsonc o el secreto DATABASE_URL"
+        ? env.VERCEL
+          ? "FALTA: agrega DATABASE_URL (Supabase → Connect → Transaction pooler) en Vercel"
+          : "FALTA: configura Hyperdrive en wrangler.jsonc o el secreto DATABASE_URL"
         : /Tenant or user not found|password authentication failed/.test(msg)
           ? "usuario o contraseña de la base incorrectos: revisa la contraseña en DATABASE_URL"
           : `error de conexión: ${msg.replace(/postgres(ql)?:\/\/\S+/g, "[url]").slice(0, 200)}`;
   }
   const ok = Object.values(checks).every((v) => v === "ok");
-  return Response.json({ ok, checks }, { status: ok ? 200 : 500 });
+  // En Vercel, las variables se asignan por entorno: deben estar marcadas en el entorno de este despliegue.
+  const plataforma = env.VERCEL
+    ? { proveedor: "Vercel", entorno: env.VERCEL_ENV ?? "?", rama: env.VERCEL_GIT_COMMIT_REF ?? "?" }
+    : { proveedor: "Cloudflare/otro" };
+  return Response.json({ ok, plataforma, checks }, { status: ok ? 200 : 500 });
 }
