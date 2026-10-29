@@ -38,7 +38,9 @@ export async function GET() {
   } catch (e) {
     const msg = String((e as { cause?: Error }).cause?.message ?? (e as Error).message);
     checks.base_de_datos = /relation "users" does not exist/.test(msg)
-      ? "conecta, pero faltan las tablas: corre npm run db:migrate con la URL de Neon"
+      ? env.VERCEL
+        ? "conecta, pero faltan las tablas: haz Redeploy en Vercel (el despliegue las crea)"
+        : "conecta, pero faltan las tablas: corre npm run db:migrate"
       : /Falta la base de datos/.test(msg)
         ? env.VERCEL
           ? "FALTA: agrega DATABASE_URL (Supabase → Connect → Transaction pooler) en Vercel"
