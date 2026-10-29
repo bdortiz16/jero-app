@@ -38,6 +38,21 @@ Para probar sin Supabase ni Siigo: `DEV_LOGIN=true` y `SIIGO_MOCK=true` en `.env
 El correo integrado de Supabase permite pocos envíos por hora; para muchos usuarios configura SMTP propio en
 *Authentication → Emails → SMTP Settings*.
 
+### Correos con la marca Jero
+
+Plantillas en español en `supabase/templates/`. Pégalas en Supabase → *Authentication → Emails → Templates*:
+
+| Plantilla de Supabase | Asunto | Archivo |
+|---|---|---|
+| Confirm signup | Confirma tu correo en Jero | `confirmar-registro.html` |
+| Reset password | Restablece tu contraseña de Jero | `restablecer-contrasena.html` |
+| Change email address | Confirma tu nuevo correo en Jero | `cambio-de-correo.html` |
+| Invite user | Te invitaron a Jero | `invitacion.html` |
+
+Usan enlaces `token_hash` hacia `/auth/callback`, que funcionan aunque el correo se abra en otro navegador o en el celular.
+Requieren que *Site URL* sea la URL pública de la app. Para que el remitente diga "Jero" (y no "Supabase Auth")
+configura SMTP propio en *Authentication → Emails → SMTP Settings* (por ejemplo Resend con tu dominio).
+
 ### Siigo
 
 1. En Siigo Nube: *Configuración → Alianzas → Mi credencial API* (requiere un plan con API).
