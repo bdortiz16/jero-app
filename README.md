@@ -69,11 +69,18 @@ factura tiene error, esa factura completa se rechaza y se muestra el motivo; el 
 - Errores temporales (429/5xx) se reintentan hasta 3 veces; los errores de datos quedan marcados con el mensaje de Siigo.
 - Si un envío se interrumpe a mitad, la factura queda en *error – estado incierto* para verificarla en Siigo antes de reintentar.
 
-## Despliegue (Vercel + Postgres)
+## Despliegue (Vercel + Neon, dominio en Cloudflare)
 
-1. Crea una base Postgres (Neon, Supabase…) y pon `DATABASE_URL`.
-2. `npm run db:migrate`
-3. Configura las variables de `.env.example` en Vercel (`ENCRYPTION_KEY` obligatoria en producción) y despliega.
+1. **Base de datos:** crea un proyecto en [Neon](https://neon.tech) y copia la *connection string* (pooled).
+2. **Vercel:** importa el repositorio `jero-app`. Las migraciones corren solas en cada despliegue (`vercel-build`).
+   Variables: `DATABASE_URL`, `AUTH_SECRET`, `AUTH_GOOGLE_ID`, `AUTH_GOOGLE_SECRET`, `ADMIN_EMAILS`,
+   `REQUIRE_APPROVAL=true`, `ENCRYPTION_KEY` (`openssl rand -base64 32`), `SIIGO_MOCK=false`.
+3. **Dominio:** en Vercel → *Settings → Domains* agrega `app.tudominio.com`. En Cloudflare → *DNS* crea
+   `CNAME app → cname.vercel-dns.com` con el proxy **desactivado (nube gris, "DNS only")**.
+   Para el dominio raíz usa el registro `A @ → 76.76.21.21` (o el valor que muestre Vercel), también en gris.
+4. **Google:** en el cliente OAuth agrega el origen `https://app.tudominio.com` y la redirección
+   `https://app.tudominio.com/api/auth/callback/google`.
+5. Entra con el correo de `ADMIN_EMAILS` y configura Siigo en *Admin → Conexión Siigo*.
 
 ## Scripts
 

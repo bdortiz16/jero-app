@@ -17,6 +17,9 @@ function create(): { db: DB; ready: Promise<void> } {
     const client = postgres(process.env.DATABASE_URL, { max: 5, prepare: false });
     return { db: drizzlePostgres(client, { schema }), ready: Promise.resolve() };
   }
+  if (process.env.NODE_ENV === "production" && process.env.VERCEL) {
+    throw new Error("Falta DATABASE_URL: configura la base Postgres (Neon) en las variables de entorno de Vercel.");
+  }
   // Desarrollo: Postgres embebido en ./.data, migrado automáticamente.
   const dir = path.join(process.cwd(), ".data", "pglite");
   mkdirSync(dir, { recursive: true });
