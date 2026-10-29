@@ -12,7 +12,7 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
       .then(setDiag)
       .catch(() => setDiag(null));
   }, []);
-  const failing = diag ? Object.entries(diag.checks).filter(([, v]) => v !== "ok") : [];
+  const failing = diag ? Object.entries(diag.checks).filter(([, v]) => v !== "ok" && !v.startsWith("pendiente")) : [];
 
   return (
     <div className="grid min-h-screen place-items-center bg-slate-50 px-4">

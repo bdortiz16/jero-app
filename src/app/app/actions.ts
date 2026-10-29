@@ -230,6 +230,10 @@ export async function saveSiigoConnection(_: ActionState, fd: FormData): Promise
   if (!/^[A-Za-z0-9]{3,100}$/.test(partnerId)) return { error: "El Partner-Id debe ser alfanumérico (3 a 100 caracteres)" };
   try {
     await saveSiigoCredentials({ username, accessKey, partnerId });
+  } catch (e) {
+    return { error: `No se pudieron guardar las credenciales: ${errMsg(e)}` };
+  }
+  try {
     const siigo = await getSiigo();
     await siigo.testConnection();
     await refreshCatalogs();

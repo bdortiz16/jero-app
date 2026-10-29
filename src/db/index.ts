@@ -2,6 +2,7 @@ import "server-only";
 import { drizzle as drizzlePostgres } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
+import { databaseUrl } from "./url";
 
 type DB = ReturnType<typeof drizzlePostgres<typeof schema>>;
 
@@ -19,7 +20,7 @@ async function workersDb(): Promise<DB> {
   const cached = perRequest.get(ctx);
   if (cached) return cached;
   // Hyperdrive (recomendado) o conexión directa a Postgres/Neon.
-  const url = (env as { HYPERDRIVE?: { connectionString: string } }).HYPERDRIVE?.connectionString ?? process.env.DATABASE_URL;
+  const url = (env as { HYPERDRIVE?: { connectionString: string } }).HYPERDRIVE?.connectionString ?? databaseUrl();
   if (!url) throw new Error("Falta la base de datos: configura Hyperdrive (binding HYPERDRIVE) o el secreto DATABASE_URL.");
   const db = drizzlePostgres(postgres(url, { max: 1, prepare: false, fetch_types: false }), { schema });
   perRequest.set(ctx, db);
@@ -27,8 +28,9 @@ async function workersDb(): Promise<DB> {
 }
 
 async function createLocal(): Promise<{ db: DB; ready: Promise<void> }> {
-  if (process.env.DATABASE_URL) {
-    const client = postgres(process.env.DATABASE_URL, { max: process.env.VERCEL ? 1 : 5, prepare: false });
+  const url = databaseUrl();
+  if (url) {
+    const client = postgres(url, { max: process.env.VERCEL ? 1 : 5, prepare: false });
     return { db: drizzlePostgres(client, { schema }), ready: Promise.resolve() };
   }
   if (process.env.VERCEL) {
