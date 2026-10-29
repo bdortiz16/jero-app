@@ -7,11 +7,11 @@ import { databaseUrl } from "@/db/url";
 export async function GET() {
   const env = process.env;
   const supa = supabaseConfig();
-  const encKey = env.ENCRYPTION_KEY ? Buffer.from(env.ENCRYPTION_KEY, "base64").length : 0;
+    const encKey = env.ENCRYPTION_KEY?.trim().length ?? 0;
   const checks: Record<string, string> = {
     SUPABASE_URL: !supa ? "FALTA (SUPABASE_URL o NEXT_PUBLIC_SUPABASE_URL)" : /^https:\/\/.+\.supabase\.co\/?$/.test(supa.url) ? "ok" : "no parece una URL de Supabase (https://xxxx.supabase.co)",
     SUPABASE_ANON_KEY: supa ? "ok" : "FALTA (SUPABASE_ANON_KEY o NEXT_PUBLIC_SUPABASE_ANON_KEY)",
-    ENCRYPTION_KEY: encKey === 32 ? "ok" : encKey ? "debe ser 32 bytes en base64 (openssl rand -base64 32)" : "pendiente: necesaria solo para guardar las credenciales de Siigo",
+    ENCRYPTION_KEY: encKey >= 16 ? "ok" : encKey ? "muy corta: usa al menos 16 caracteres" : "pendiente: necesaria solo para guardar las credenciales de Siigo",
   };
   // Errores típicos con Supabase: conexión directa (solo IPv6) o contraseña con caracteres especiales sin codificar.
   const dbUrl = databaseUrl();

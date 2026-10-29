@@ -11,13 +11,16 @@ let cached: Promise<CryptoKey> | null = null;
 function key(): Promise<CryptoKey> {
   return (cached ??= (async () => {
     let raw: Uint8Array<ArrayBuffer> | null = null;
-    if (process.env.ENCRYPTION_KEY) {
-      const buf = unb64(process.env.ENCRYPTION_KEY);
-      if (buf.length === 32) raw = buf;
+    const secret = process.env.ENCRYPTION_KEY?.trim();
+    if (secret) {
+      const buf = unb64(secret);
+      // 32 bytes en base64 se usan tal cual; cualquier otra clave larga se deriva con SHA-256.
+      if (buf.length === 32 && /^[A-Za-z0-9+/]{43}=$/.test(secret)) raw = buf;
+      else if (secret.length >= 16) raw = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(secret)));
     }
     if (!raw) {
       if (process.env.NODE_ENV === "production") {
-        throw new Error("ENCRYPTION_KEY debe ser 32 bytes en base64 (openssl rand -base64 32)");
+        throw new Error("Falta ENCRYPTION_KEY (mínimo 16 caracteres) para guardar las credenciales de Siigo.");
       }
       // En desarrollo usamos una llave fija para no bloquear el arranque.
       const seed = new TextEncoder().encode("jero-dev-only-key");
