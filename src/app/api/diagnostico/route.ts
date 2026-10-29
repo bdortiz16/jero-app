@@ -13,7 +13,25 @@ export async function GET() {
     ENCRYPTION_KEY: encKey === 32 ? "ok" : encKey ? "debe ser 32 bytes en base64 (openssl rand -base64 32)" : "FALTA",
     ADMIN_EMAILS: env.ADMIN_EMAILS ? "ok" : "FALTA",
   };
-  try {
+  // Errores típicos con Supabase: conexión directa (solo IPv6) o contraseña con caracteres especiales sin codificar.
+  const dbUrl = env.DATABASE_URL;
+  let dbHint: string | null = null;
+  if (dbUrl) {
+    try {
+      const u = new URL(dbUrl);
+      if (!u.hostname.includes(".")) {
+        dbHint = "la URL quedó mal formada: si la contraseña tiene símbolos (@ # / ? %) cámbiala en Supabase por una solo con letras y números";
+      } else if (/^db\..+\.supabase\.co$/.test(u.hostname)) {
+        dbHint = "usas la conexión directa de Supabase (no funciona en Vercel): usa Connect → Transaction pooler (puerto 6543)";
+      } else if (u.password.includes("[YOUR-PASSWORD]") || u.password === "%5BYOUR-PASSWORD%5D") {
+        dbHint = "reemplaza [YOUR-PASSWORD] por la contraseña real de la base de datos";
+      }
+    } catch {
+      dbHint = "la URL no es válida: si la contraseña tiene símbolos (@ # / ? %) cámbiala en Supabase por una solo con letras y números";
+    }
+  }
+  if (dbHint) checks.base_de_datos = dbHint;
+  else try {
     const db = await getDb();
     await db.execute(sql`select 1 from users limit 1`);
     checks.base_de_datos = "ok";
