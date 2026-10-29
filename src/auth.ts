@@ -79,6 +79,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   providers,
   session: { strategy: "jwt" },
   pages: { signIn: "/login", error: "/login" },
+  // Muestra la causa real en los logs (npx wrangler tail), no solo "Configuration".
+  logger: {
+    error(error) {
+      const cause = (error as { cause?: { err?: Error } }).cause?.err;
+      console.error(`[auth] ${error.name}: ${error.message}${cause ? ` | causa: ${cause.message}` : ""}`);
+    },
+  },
   callbacks: {
     async signIn({ user, account, profile }) {
       if (account?.provider === "google" && !(profile?.email_verified ?? false)) return false;

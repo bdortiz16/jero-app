@@ -6,7 +6,7 @@ export const metadata = { title: "Iniciar sesión" };
 
 const errors: Record<string, string> = {
   AccessDenied: "Tu cuenta no tiene acceso. Contacta al administrador.",
-  Configuration: "Error de configuración del inicio de sesión. Revisa AUTH_GOOGLE_ID / AUTH_GOOGLE_SECRET / AUTH_SECRET.",
+  Configuration: "No se pudo completar el inicio de sesión (configuración o base de datos). Abre /api/diagnostico para ver qué falta.",
 };
 
 export default async function LoginPage({ searchParams }: { searchParams: Promise<{ error?: string; callbackUrl?: string }> }) {
