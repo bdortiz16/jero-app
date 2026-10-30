@@ -5,6 +5,9 @@ import { Nav } from "@/components/nav";
 import { Logo } from "@/components/ui";
 import { siigoMockEnabled } from "@/lib/siigo";
 
+// Todas las páginas de la app dependen del usuario: nunca se prerenderizan.
+export const dynamic = "force-dynamic";
+
 const roleLabel = { ADMIN: "Administrador", CONTADOR: "Contador", USUARIO: "Consulta" } as const;
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {

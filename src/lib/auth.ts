@@ -20,8 +20,11 @@ const adminEmails = () =>
 
 /** Correo del usuario autenticado (Supabase Auth), o null. */
 export async function getAuthEmail(): Promise<string | null> {
+  // Leer las cookies siempre: marca la página como dinámica (por usuario). Sin esto, si Supabase no está
+  // configurado al construir, Next.js prerenderiza las páginas con el "redirigir al login" congelado.
+  const store = await cookies();
   if (devLoginEnabled) {
-    const dev = (await cookies()).get(DEV_COOKIE)?.value;
+    const dev = store.get(DEV_COOKIE)?.value;
     if (dev) return dev.toLowerCase();
   }
   if (!supabaseConfig()) return null;
