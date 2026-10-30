@@ -2,6 +2,7 @@ import { asc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireUser } from "@/lib/session";
 import { getCatalogs } from "@/lib/siigo";
+import { syncProductsFromSiigo } from "@/lib/sync";
 import { DEFAULT_COMMISSION_CONFIG, type CommissionModelConfig } from "@/lib/batch/commission";
 import { Alert, PageHeader, StatusBadge } from "@/components/ui";
 import { ActionButton, ActionForm, Submit } from "@/components/forms";
@@ -13,11 +14,24 @@ export default async function ModelosPage({ searchParams }: { searchParams: Prom
   const user = await requireUser();
   const { editar } = await searchParams;
   const db = await getDb();
-  const [models, products, catalogs] = await Promise.all([
+  const loadProducts = () =>
+    db.select({ code: schema.products.code, name: schema.products.name }).from(schema.products).orderBy(asc(schema.products.code));
+  const [models, initialProducts, catalogs] = await Promise.all([
     db.select().from(schema.businessModels).orderBy(asc(schema.businessModels.id)),
-    db.select({ code: schema.products.code, name: schema.products.name }).from(schema.products).orderBy(asc(schema.products.code)),
+    loadProducts(),
     getCatalogs(),
   ]);
+  // Si aún no se han traído los productos de Siigo, se traen aquí mismo para poder elegir los ítems.
+  let products = initialProducts;
+  let syncError: string | null = null;
+  if (products.length === 0 && catalogs && user.role !== "USUARIO") {
+    try {
+      await syncProductsFromSiigo();
+      products = await loadProducts();
+    } catch (e) {
+      syncError = (e as Error).message;
+    }
+  }
   const isAdmin = user.role === "ADMIN";
   const editing = models.find((m) => String(m.id) === editar);
   const cfg = { ...DEFAULT_COMMISSION_CONFIG, ...((editing?.config ?? {}) as Partial<CommissionModelConfig>) };
@@ -25,8 +39,17 @@ export default async function ModelosPage({ searchParams }: { searchParams: Prom
   const ivas = taxes.filter((t) => /iva/i.test(t.type) && !/rete/i.test(t.type));
   const retentions = taxes.filter((t) => /rete/i.test(t.type));
   const suggestedIva = cfg.ivaTaxId || ivas.find((t) => t.percentage === 19)?.id || 0;
-  const suggestedRet = cfg.retentionTaxId ?? retentions.find((t) => /comisi/i.test(t.name) && t.percentage === 11)?.id ?? null;
-  const suggestedPay = cfg.paymentId ?? catalogs?.paymentTypes.find((p) => /transferencia/i.test(p.name) && /d[eé]bito/i.test(p.name))?.id ?? null;
+  const suggestedRet =
+    cfg.retentionTaxId ??
+    (retentions.find((t) => /comisi/i.test(t.name) && Number(t.percentage) === 11) ??
+      retentions.find((t) => /comisi/i.test(t.name)) ??
+      retentions.find((t) => /fuente/i.test(`${t.type} ${t.name}`) && Number(t.percentage) === 11))?.id ??
+    null;
+  const pays = catalogs?.paymentTypes ?? [];
+  const suggestedPay =
+    cfg.paymentId ??
+    (pays.find((p) => /transfer/i.test(p.name) && /d[eé]bito/i.test(p.name)) ?? pays.find((p) => /transfer/i.test(p.name)))?.id ??
+    null;
   const taxName = (id: number | null | undefined) => taxes.find((t) => t.id === id)?.name ?? (id ? `#${id}` : "—");
 
   return (
@@ -72,25 +95,27 @@ export default async function ModelosPage({ searchParams }: { searchParams: Prom
             y la <b>comisión</b> con IVA; la retención en la fuente solo se aplica a personas jurídicas colombianas (NIT).
           </p>
           {!catalogs && <div className="mb-4"><Alert kind="warning">Primero conecta Siigo para cargar impuestos y formas de pago.</Alert></div>}
-          {products.length === 0 && <div className="mb-4"><Alert kind="info">Sincroniza los productos (menú Productos) para elegir los códigos de la lista.</Alert></div>}
+          {syncError && <div className="mb-4"><Alert kind="error">No se pudieron traer los productos de Siigo: {syncError}</Alert></div>}
+          {!syncError && products.length === 0 && catalogs && (
+            <div className="mb-4"><Alert kind="warning">Tu Siigo no tiene productos creados. Crea en Siigo los productos 01 y 02 y recarga esta página.</Alert></div>
+          )}
           <ActionForm action={saveCommissionModel} className="grid gap-4 sm:grid-cols-2">
             {editing && <input type="hidden" name="id" value={editing.id} />}
             <div className="sm:col-span-2">
               <label className="label" htmlFor="name">Nombre del modelo</label>
               <input id="name" name="name" required className="input" defaultValue={editing?.name ?? "Dispersión de pagos + comisión"} />
             </div>
-            <datalist id="productos">{products.map((p) => <option key={p.code} value={p.code}>{p.name}</option>)}</datalist>
             <div>
-              <label className="label" htmlFor="thirdPartyCode">Código producto de terceros</label>
-              <input id="thirdPartyCode" name="thirdPartyCode" list="productos" required className="input" defaultValue={cfg.thirdPartyCode} />
+              <label className="label" htmlFor="thirdPartyCode">Producto de terceros (ítem sin impuestos)</label>
+              <ProductField id="thirdPartyCode" products={products} value={cfg.thirdPartyCode} />
             </div>
             <div>
               <label className="label" htmlFor="thirdPartyDescription">Descripción</label>
               <input id="thirdPartyDescription" name="thirdPartyDescription" className="input" defaultValue={cfg.thirdPartyDescription} />
             </div>
             <div>
-              <label className="label" htmlFor="commissionCode">Código producto de comisión</label>
-              <input id="commissionCode" name="commissionCode" list="productos" required className="input" defaultValue={cfg.commissionCode} />
+              <label className="label" htmlFor="commissionCode">Producto de comisión (ítem con IVA)</label>
+              <ProductField id="commissionCode" products={products} value={cfg.commissionCode} />
             </div>
             <div>
               <label className="label" htmlFor="commissionDescription">Descripción</label>
@@ -135,5 +160,19 @@ export default async function ModelosPage({ searchParams }: { searchParams: Prom
         </div>
       )}
     </>
+  );
+}
+
+/** Lista de productos de Siigo; si no hay productos sincronizados, campo de texto para escribir el código. */
+function ProductField({ id, products, value }: { id: string; products: { code: string; name: string }[]; value: string }) {
+  if (products.length === 0) return <input id={id} name={id} required className="input" defaultValue={value} />;
+  const known = products.some((p) => p.code === value);
+  return (
+    <select id={id} name={id} required className="input" defaultValue={known ? value : ""}>
+      <option value="">— Seleccione —</option>
+      {products.map((p) => (
+        <option key={p.code} value={p.code}>{p.code} · {p.name}</option>
+      ))}
+    </select>
   );
 }

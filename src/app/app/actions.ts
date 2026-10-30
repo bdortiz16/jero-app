@@ -222,31 +222,11 @@ export async function syncCustomers(): Promise<ActionState> {
 export async function syncProducts(): Promise<ActionState> {
   const user = await requireEditor();
   try {
-    const siigo = await getSiigo();
-    const db = await getDb();
-    let page = 1;
-    let count = 0;
-    for (;;) {
-      const r = await siigo.products(page, 100);
-      for (const p of r.results) {
-        const price = p.prices?.[0]?.price_list?.[0]?.value;
-        const values = {
-          siigoId: p.id,
-          code: p.code,
-          name: p.name,
-          price: price !== undefined ? price.toFixed(2) : null,
-          taxIds: (p.taxes ?? []).map((t) => t.id),
-          active: p.active,
-          syncedAt: new Date(),
-        };
-        await db.insert(schema.products).values(values).onConflictDoUpdate({ target: schema.products.code, set: values });
-        count++;
-      }
-      if (r.results.length === 0 || page * r.pagination.page_size >= r.pagination.total_results) break;
-      page++;
-    }
+    const { syncProductsFromSiigo } = await import("@/lib/sync");
+    const count = await syncProductsFromSiigo();
     await audit(user, "siigo.sync_products", { count });
     revalidatePath("/app/productos");
+    revalidatePath("/app/modelos");
     return { ok: `${count} productos sincronizados` };
   } catch (e) {
     return { error: errMsg(e) };
