@@ -15,7 +15,7 @@ import { SummaryTable } from "@/components/modal";
 import { emitMovementAction } from "../actions";
 import { ImportMovementsForm } from "./import-form";
 import { BulkEmit } from "./bulk-emit";
-import { ClickableRow, SidePanel } from "./row-and-panel";
+import { ClickableRow, SidePanel } from "@/components/row-and-panel";
 import { MovementDetail } from "./movement-detail";
 
 export const metadata = { title: "Movimientos" };

@@ -2,16 +2,20 @@ import { asc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireUser } from "@/lib/session";
 import { getCatalogs } from "@/lib/siigo";
-import { DEFAULT_COMMISSION_CONFIG, type CommissionModelConfig } from "@/lib/batch/commission";
-import { Alert, PageHeader, StatusBadge } from "@/components/ui";
+import { DEFAULT_COMMISSION_CONFIG, previewCommissionInvoice, type CommissionModelConfig } from "@/lib/batch/commission";
+import Link from "next/link";
+import { Alert, PageHeader } from "@/components/ui";
+import { ClickableRow, SidePanel } from "@/components/row-and-panel";
+import { SummaryTable } from "@/components/modal";
+import { money } from "@/lib/format";
 import { ActionButton, ActionForm, Submit } from "@/components/forms";
 import { deleteModel, saveCommissionModel, syncAllFromSiigo, toggleModel } from "../actions";
 
 export const metadata = { title: "Modelos de negocio" };
 
-export default async function ModelosPage({ searchParams }: { searchParams: Promise<{ editar?: string }> }) {
+export default async function ModelosPage({ searchParams }: { searchParams: Promise<{ editar?: string; nuevo?: string }> }) {
   const user = await requireUser();
-  const { editar } = await searchParams;
+  const { editar, nuevo } = await searchParams;
   const db = await getDb();
   const loadProducts = () =>
     db.select({ code: schema.products.code, name: schema.products.name }).from(schema.products).orderBy(asc(schema.products.code));
@@ -42,7 +46,11 @@ export default async function ModelosPage({ searchParams }: { searchParams: Prom
 
   return (
     <>
-      <PageHeader title="Modelos de negocio" description="Plantillas que convierten tus archivos en facturas. Solo un modelo puede estar activo: es el que se usa al emitir (individual o masivo)." />
+      <PageHeader
+        title="Modelos de negocio"
+        description="Plantillas que convierten tus archivos en facturas. Solo un modelo puede estar activo: es el que se usa al emitir (individual o masivo)."
+        actions={isAdmin && <Link href="/app/modelos?nuevo=1" scroll={false} className="btn-primary">+ Nuevo modelo</Link>}
+      />
       {models.length > 0 && !models.some((m) => m.active) && (
         <div className="mb-4"><Alert kind="warning">No hay ningún modelo activo: activa uno para poder emitir facturas de movimientos.</Alert></div>
       )}
@@ -54,8 +62,8 @@ export default async function ModelosPage({ searchParams }: { searchParams: Prom
             {models.map((m) => {
               const c = { ...DEFAULT_COMMISSION_CONFIG, ...(m.config as Partial<CommissionModelConfig>) };
               return (
-                <tr key={m.id}>
-                  <td className="font-medium">{m.name}<div className="text-xs text-slate-500">Pagos a terceros + comisión</div></td>
+                <ClickableRow key={m.id} href={`/app/modelos?editar=${m.id}`} selected={editing?.id === m.id}>
+                  <td className="font-medium text-brand-700">{m.name}<div className="text-xs text-slate-500">Pagos a terceros + comisión</div></td>
                   <td className="text-xs">{c.thirdPartyCode} · {c.thirdPartyDescription}<br />{c.commissionCode} · {c.commissionDescription}</td>
                   <td>{c.defaultPct}% {c.ivaIncluded ? "(IVA incluido)" : "+ IVA"}</td>
                   <td className="text-xs">{taxName(c.ivaTaxId)}{c.retentionTaxId ? <><br />{taxName(c.retentionTaxId)} (solo persona jurídica)</> : null}</td>
@@ -69,7 +77,7 @@ export default async function ModelosPage({ searchParams }: { searchParams: Prom
                   <td className="text-right whitespace-nowrap">
                     {isAdmin && (
                       <>
-                        <a className="btn-secondary mr-2 py-1" href={`/app/modelos?editar=${m.id}`}>Editar</a>
+                        <Link className="btn-secondary mr-2 py-1" href={`/app/modelos?editar=${m.id}`} scroll={false}>Ver / editar</Link>
                         {m.active ? (
                           <ActionButton className="btn-secondary py-1" action={toggleModel.bind(null, m.id, false)} confirmTitle="Desactivar modelo" confirmLabel="Desactivar" confirm="Sin un modelo activo no se podrán emitir facturas de movimientos.">
                             Desactivar
@@ -87,16 +95,29 @@ export default async function ModelosPage({ searchParams }: { searchParams: Prom
                       </>
                     )}
                   </td>
-                </tr>
+                </ClickableRow>
               );
             })}
-            {models.length === 0 && <tr><td colSpan={6} className="py-8 text-center text-slate-500">Aún no hay modelos. Crea el primero abajo.</td></tr>}
+            {models.length === 0 && <tr><td colSpan={6} className="py-8 text-center text-slate-500">Aún no hay modelos. Crea el primero con “+ Nuevo modelo”.</td></tr>}
           </tbody>
         </table>
       </div>
 
-      {isAdmin && (
-        <div className="card max-w-3xl">
+      {(editing || (nuevo && isAdmin) || (isAdmin && models.length === 0)) && (
+        <SidePanel closeHref="/app/modelos" title={editing ? "Modelo de negocio" : "Nuevo modelo"}>
+          {editing && (
+            <ModelSummary
+              name={editing.name}
+              active={editing.active}
+              cfg={cfg}
+              taxName={taxName}
+              ivaPct={taxes.find((t) => t.id === cfg.ivaTaxId)?.percentage ?? 19}
+              retPct={taxes.find((t) => t.id === cfg.retentionTaxId)?.percentage ?? null}
+              paymentName={(catalogs?.paymentTypes ?? []).find((p) => p.id === cfg.paymentId)?.name ?? "El predeterminado"}
+            />
+          )}
+        {isAdmin && (
+        <div className="card">
           <h2 className="mb-1 font-semibold">{editing ? `Editar: ${editing.name}` : "Nuevo modelo: pagos a terceros + comisión"}</h2>
           <p className="mb-4 text-sm text-slate-500">
             Cada operación del archivo genera una factura con dos ítems: el valor dispersado como <b>ingreso de terceros</b> (sin impuestos)
@@ -168,10 +189,12 @@ export default async function ModelosPage({ searchParams }: { searchParams: Prom
             </label>
             <div className="flex gap-2 sm:col-span-2">
               <Submit>{editing ? "Guardar cambios" : "Crear modelo"}</Submit>
-              {editing && <a href="/app/modelos" className="btn-secondary">Cancelar</a>}
+              <Link href="/app/modelos" scroll={false} className="btn-secondary">Cerrar</Link>
             </div>
           </ActionForm>
         </div>
+      )}
+        </SidePanel>
       )}
     </>
   );
@@ -188,5 +211,61 @@ function ProductField({ id, products, value }: { id: string; products: { code: s
         <option key={p.code} value={p.code}>{p.code} · {p.name}</option>
       ))}
     </select>
+  );
+}
+
+/** Resumen del modelo: cómo arma la factura, con un ejemplo de $1.000.000 a una empresa. */
+function ModelSummary({
+  name,
+  active,
+  cfg,
+  taxName,
+  ivaPct,
+  retPct,
+  paymentName,
+}: {
+  name: string;
+  active: boolean;
+  cfg: CommissionModelConfig;
+  taxName: (id: number | null | undefined) => string;
+  ivaPct: number;
+  retPct: number | null;
+  paymentName: string;
+}) {
+  const ex = previewCommissionInvoice(1_000_000, cfg, ivaPct, retPct);
+  return (
+    <div className="card mb-6 space-y-4">
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-semibold">{name}</h2>
+          <p className="text-sm text-slate-500">Pagos a terceros + comisión</p>
+        </div>
+        {active ? (
+          <span className="rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800">Activo · se usa al emitir</span>
+        ) : (
+          <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">Inactivo</span>
+        )}
+      </div>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
+        <dt className="text-slate-500">Ítem de terceros</dt><dd>{cfg.thirdPartyCode} · sin impuestos</dd>
+        <dt className="text-slate-500">Ítem de comisión</dt><dd>{cfg.commissionCode} · {cfg.commissionDescription}</dd>
+        <dt className="text-slate-500">Comisión</dt><dd>{cfg.defaultPct}% del valor dispersado {cfg.ivaIncluded ? "(IVA incluido)" : "+ IVA aparte"}{cfg.roundToPeso ? " · redondeada a pesos" : ""}</dd>
+        <dt className="text-slate-500">IVA</dt><dd>{taxName(cfg.ivaTaxId)}</dd>
+        <dt className="text-slate-500">Retención</dt><dd>{cfg.retentionTaxId ? `${taxName(cfg.retentionTaxId)} · solo empresas (NIT), sobre la comisión sin IVA` : "Sin retención"}</dd>
+        <dt className="text-slate-500">Medio de pago</dt><dd>{paymentName}</dd>
+      </dl>
+      <div>
+        <div className="mb-2 text-xs font-medium tracking-wide text-slate-500 uppercase">Ejemplo: $1.000.000 dispersados a una empresa</div>
+        <SummaryTable
+          rows={[
+            ["Operación recibida para terceros (02)", money(1_000_000)],
+            [`Comisión ${cfg.defaultPct}% (01) · base sin IVA`, money(ex.base)],
+            [`IVA ${ivaPct}%`, money(ex.iva)],
+            ...(ex.retention ? ([[`Retención ${retPct}% sobre ${money(ex.base)}`, `− ${money(ex.retention)}`]] as [string, string][]) : []),
+          ]}
+          total={["Total a pagar", money(ex.total)]}
+        />
+      </div>
+    </div>
   );
 }
