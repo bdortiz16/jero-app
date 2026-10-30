@@ -143,3 +143,21 @@ export function expandCommissionRows(
   });
   return { rows: out, errors };
 }
+
+/**
+ * Vista previa de la factura de una operación con el modelo: la retención se calcula sobre la base de la
+ * comisión SIN IVA (nunca sobre el IVA ni sobre el valor de terceros).
+ */
+export function previewCommissionInvoice(
+  payment: number,
+  cfg: Pick<CommissionModelConfig, "defaultPct" | "roundToPeso" | "ivaIncluded">,
+  ivaPct: number,
+  retentionPct: number | null,
+) {
+  const commission = commissionFor(payment, cfg.defaultPct, cfg.roundToPeso);
+  const { base, iva } = cfg.ivaIncluded
+    ? splitIvaIncluded(commission, ivaPct)
+    : { base: commission, iva: round2((commission * ivaPct) / 100) };
+  const retention = retentionPct ? round2((base * retentionPct) / 100) : 0;
+  return { commission, base, iva, retention, total: round2(payment + base + iva - retention) };
+}

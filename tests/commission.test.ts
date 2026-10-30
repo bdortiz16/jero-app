@@ -68,3 +68,18 @@ describe("modelo pagos a terceros + comisión", () => {
     }
   });
 });
+
+import { previewCommissionInvoice } from "@/lib/batch/commission";
+describe("retención sobre la comisión sin IVA", () => {
+  it("IVA aparte: 0,35% de 400 millones", () => {
+    const r = previewCommissionInvoice(400_000_000, { defaultPct: 0.35, roundToPeso: true, ivaIncluded: false }, 19, 11);
+    expect(r).toMatchObject({ base: 1_400_000, iva: 266_000, retention: 154_000, total: 401_512_000 });
+  });
+  it("IVA incluido: comisión de 20.000 → base 16.806,72 y retención sobre esa base", () => {
+    const r = previewCommissionInvoice(5_714_286, { defaultPct: 0.35, roundToPeso: true, ivaIncluded: true }, 19, 11);
+    expect(r.commission).toBe(20_000);
+    expect(r.base).toBe(16_806.72);
+    expect(r.iva).toBe(3_193.28);
+    expect(r.retention).toBe(1_848.74);
+  });
+});

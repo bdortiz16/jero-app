@@ -3,7 +3,7 @@ import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { getCatalogs } from "@/lib/siigo";
 import { activeModel } from "@/lib/movements-emit";
-import { commissionFor } from "@/lib/batch/commission";
+import { previewCommissionInvoice } from "@/lib/batch/commission";
 import { money, round2, dateTime } from "@/lib/format";
 import { Alert, PageHeader } from "@/components/ui";
 import { ActionButton } from "@/components/forms";
@@ -38,9 +38,10 @@ export async function MovementDetail({ id, role, inPanel = false }: { id: number
   // Vista previa con el modelo activo (si aún no se ha facturado)
   const ivaPct = catalogs?.taxes.find((t) => t.id === model?.cfg.ivaTaxId)?.percentage ?? 19;
   const retTax = catalogs?.taxes.find((t) => t.id === model?.cfg.retentionTaxId);
-  const commission = model ? commissionFor(amount, model.cfg.defaultPct, model.cfg.roundToPeso) : 0;
-  const iva = model && !model.cfg.ivaIncluded ? round2((commission * ivaPct) / 100) : 0;
-  const ret = m.personType === "Company" && retTax ? round2((commission * Number(retTax.percentage)) / 100) : 0;
+  const pv = model
+    ? previewCommissionInvoice(amount, model.cfg, ivaPct, m.personType === "Company" && retTax ? Number(retTax.percentage) : null)
+    : null;
+  const ret = pv?.retention ?? 0;
 
   return (
     <>
@@ -114,11 +115,11 @@ export async function MovementDetail({ id, role, inPanel = false }: { id: number
                   <SummaryTable
                     rows={[
                       ["Operación recibida para terceros (02)", money(amount)],
-                      [`Comisión ${model.cfg.defaultPct}% (01)`, money(commission)],
-                      [`IVA ${ivaPct}%`, money(iva)],
-                      ...(ret ? ([[retTax!.name, `− ${money(ret)}`]] as [string, string][]) : []),
+                      [`Comisión ${model.cfg.defaultPct}% (01) · base sin IVA`, money(pv!.base)],
+                      [`IVA ${ivaPct}%`, money(pv!.iva)],
+                      ...(ret ? ([[`${retTax!.name} (sobre ${money(pv!.base)})`, `− ${money(ret)}`]] as [string, string][]) : []),
                     ]}
-                    total={["Total a pagar", money(round2(amount + commission + iva - ret))]}
+                    total={["Total a pagar", money(pv?.total ?? amount)]}
                   />
                 </>
               ) : (
@@ -130,7 +131,7 @@ export async function MovementDetail({ id, role, inPanel = false }: { id: number
                   action={emitMovementAction.bind(null, m.id, {})}
                   confirmTitle="Emitir factura en Siigo"
                   confirmLabel="Emitir factura"
-                  confirm={`Se creará en Siigo la factura de ${m.customerName} por ${money(round2(amount + commission + iva - ret))} y se enviará a la DIAN.`}
+                  confirm={`Se creará en Siigo la factura de ${m.customerName} por ${money(pv?.total ?? amount)} y se enviará a la DIAN.`}
                 >
                   {m.status === "error" ? "Reintentar emisión" : "Emitir factura"}
                 </ActionButton>

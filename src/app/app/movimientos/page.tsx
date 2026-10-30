@@ -5,7 +5,7 @@ import { requireUser } from "@/lib/session";
 import { companyAllowed, getSiigoDefaults, noteForCompany } from "@/lib/settings";
 import { getCatalogs, resolveDocumentId, resolveSellerId } from "@/lib/siigo";
 import { activeModel } from "@/lib/movements-emit";
-import { commissionFor } from "@/lib/batch/commission";
+import { previewCommissionInvoice } from "@/lib/batch/commission";
 import { rowsOf } from "@/lib/batch/process";
 import { movementOrder, movementWhere } from "@/lib/movement-filters";
 import { money, round2 } from "@/lib/format";
@@ -70,6 +70,14 @@ export default async function MovimientosPage({
           </Alert>
         </div>
       )}
+      {model && !model.cfg.retentionTaxId && (
+        <div className="mb-4">
+          <Alert kind="warning">
+            El modelo activo <b>no tiene retención configurada</b>: a las personas jurídicas no se les aplicará Retefuente.{" "}
+            <Link className="underline" href={`/app/modelos?editar=${model.id}`}>Configurar retención en el modelo</Link>.
+          </Alert>
+        </div>
+      )}
       {!model && <div className="mb-4"><Alert kind="warning">No hay un modelo de negocio activo. <Link className="underline" href="/app/modelos">Créalo aquí</Link> antes de emitir.</Alert></div>}
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
@@ -125,8 +133,8 @@ export default async function MovimientosPage({
           <tbody>
             {rows.slice(0, PAGE).map((m) => {
               const amount = Number(m.amount);
-              const commission = model ? commissionFor(amount, model.cfg.defaultPct, model.cfg.roundToPeso) : 0;
-              const iva = model && !model.cfg.ivaIncluded ? round2((commission * ivaPct) / 100) : 0;
+              const applyRet = m.personType === "Company" && retTax;
+              const pv = model ? previewCommissionInvoice(amount, model.cfg, ivaPct, applyRet ? Number(retTax.percentage) : null) : null;
               const otherCompany = !companyAllowed(m.company, defaults.issuerCompanies);
               return (
                 <ClickableRow key={m.id} href={href(page, { ver: String(m.id) })} selected={ver === String(m.id)}>
@@ -158,7 +166,7 @@ export default async function MovimientosPage({
                           action={emitMovementAction.bind(null, m.id, {})}
                           confirmTitle="Emitir factura en Siigo"
                           confirmLabel="Emitir factura"
-                          confirm={<EmitSummary m={m} amount={amount} commission={commission} iva={iva} ivaPct={ivaPct} pct={model.cfg.defaultPct} retention={m.personType === "Company" && retTax ? { name: retTax.name, pct: Number(retTax.percentage) } : null} note={noteForCompany(m.company, defaults.companyNotes)} />}
+                          confirm={<EmitSummary m={m} amount={amount} pv={pv!} ivaPct={ivaPct} pct={model.cfg.defaultPct} ivaIncluded={model.cfg.ivaIncluded} retentionName={applyRet ? retTax.name : null} retentionMissing={m.personType === "Company" && !retTax} note={noteForCompany(m.company, defaults.companyNotes)} />}
                         >
                           {m.status === "error" ? "Reintentar" : "Emitir factura"}
                         </ActionButton>
@@ -188,28 +196,29 @@ export default async function MovimientosPage({
 function EmitSummary({
   m,
   amount,
-  commission,
-  iva,
+  pv,
   ivaPct,
   pct,
-  retention,
+  ivaIncluded,
+  retentionName,
+  retentionMissing,
   note,
 }: {
   m: { customerName: string; identificationRaw: string; company: string; personType: string };
   amount: number;
-  commission: number;
-  iva: number;
+  pv: { commission: number; base: number; iva: number; retention: number; total: number };
   ivaPct: number;
   pct: number;
-  retention: { name: string; pct: number } | null;
+  ivaIncluded: boolean;
+  retentionName: string | null;
+  retentionMissing: boolean;
   note?: string | null;
 }) {
-  const ret = retention ? round2((commission * retention.pct) / 100) : 0;
   const rows: [string, string][] = [
     ["Operación recibida para terceros (02)", money(amount)],
-    [`Comisión ${pct}% (01)`, money(commission)],
-    ...(iva ? ([[`IVA ${ivaPct}% de la comisión`, money(iva)]] as [string, string][]) : []),
-    ...(retention ? ([[`${retention.name}`, `− ${money(ret)}`]] as [string, string][]) : []),
+    [`Comisión ${pct}% (01) · base sin IVA`, money(pv.base)],
+    [`IVA ${ivaPct}% de la comisión`, money(pv.iva)],
+    ...(retentionName ? ([[`${retentionName} (sobre ${money(pv.base)})`, `− ${money(pv.retention)}`]] as [string, string][]) : []),
   ];
   return (
     <div className="space-y-3">
@@ -219,7 +228,13 @@ function EmitSummary({
           {m.identificationRaw} · {m.personType === "Company" ? "Persona jurídica" : "Persona natural"} · {m.company}
         </div>
       </div>
-      <SummaryTable rows={rows} total={["Total a pagar", money(round2(amount + commission + iva - ret))]} />
+      {ivaIncluded && <p className="text-xs text-slate-500">Comisión con IVA incluido: {money(pv.commission)} = base {money(pv.base)} + IVA {money(pv.iva)}.</p>}
+      <SummaryTable rows={rows} total={["Total a pagar", money(pv.total)]} />
+      {retentionMissing && (
+        <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">
+          Este cliente es persona jurídica, pero el modelo activo no tiene retención configurada (Modelos de negocio → Editar → Retención).
+        </p>
+      )}
       <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700">
         <b>Descripción:</b> Operación recibida para terceros - {m.customerName}
         {note && <><br /><b>Observaciones:</b> {note}</>}
