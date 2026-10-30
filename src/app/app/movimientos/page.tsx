@@ -2,7 +2,7 @@ import Link from "next/link";
 import { and, asc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireUser } from "@/lib/session";
-import { companyAllowed, getSiigoDefaults } from "@/lib/settings";
+import { companyAllowed, getSiigoDefaults, noteForCompany } from "@/lib/settings";
 import { getCatalogs } from "@/lib/siigo";
 import { activeModel } from "@/lib/movements-emit";
 import { commissionFor } from "@/lib/batch/commission";
@@ -145,7 +145,7 @@ export default async function MovimientosPage({
                           action={emitMovementAction.bind(null, m.id, {})}
                           confirmTitle="Emitir factura en Siigo"
                           confirmLabel="Emitir factura"
-                          confirm={<EmitSummary m={m} amount={amount} commission={commission} iva={iva} ivaPct={ivaPct} pct={model.cfg.defaultPct} retention={m.personType === "Company" && retTax ? { name: retTax.name, pct: Number(retTax.percentage) } : null} />}
+                          confirm={<EmitSummary m={m} amount={amount} commission={commission} iva={iva} ivaPct={ivaPct} pct={model.cfg.defaultPct} retention={m.personType === "Company" && retTax ? { name: retTax.name, pct: Number(retTax.percentage) } : null} note={noteForCompany(m.company, defaults.companyNotes)} />}
                         >
                           {m.status === "error" ? "Reintentar" : "Emitir factura"}
                         </ActionButton>
@@ -172,6 +172,7 @@ function EmitSummary({
   ivaPct,
   pct,
   retention,
+  note,
 }: {
   m: { customerName: string; identificationRaw: string; company: string; personType: string };
   amount: number;
@@ -180,6 +181,7 @@ function EmitSummary({
   ivaPct: number;
   pct: number;
   retention: { name: string; pct: number } | null;
+  note?: string | null;
 }) {
   const ret = retention ? round2((commission * retention.pct) / 100) : 0;
   const rows: [string, string][] = [
@@ -197,6 +199,7 @@ function EmitSummary({
         </div>
       </div>
       <SummaryTable rows={rows} total={["Total a pagar", money(round2(amount + commission + iva - ret))]} />
+      {note && <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700"><b>Leyenda:</b> {note}</p>}
       <p className="text-xs text-slate-500">La factura se crea en Siigo y se envía a la DIAN. Esta acción no se puede deshacer desde Jero.</p>
     </div>
   );

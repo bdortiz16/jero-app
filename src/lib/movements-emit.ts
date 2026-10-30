@@ -3,7 +3,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Movement } from "@/db/schema";
 import { getCatalogs, getSiigo, type SiigoApi } from "./siigo";
-import { companyAllowed, getSiigoDefaults, type SiigoDefaults } from "./settings";
+import { companyAllowed, getSiigoDefaults, noteForCompany, type SiigoDefaults } from "./settings";
 import { buildInvoices, toSiigoRequest } from "./batch/build";
 import { DEFAULT_COMMISSION_CONFIG, expandCommissionRows, type CommissionModelConfig } from "./batch/commission";
 import { siigoName } from "./movements";
@@ -124,7 +124,14 @@ export async function emitMovement(movementId: number, userId: string): Promise<
     });
     const built = invoices[0];
     if (!built) throw await fail([...exp.errors, ...errors].map((e) => e.message).join(" · ") || "No se pudo armar la factura");
+    // Leyenda de la empresa (ej. contrato de mandato KAUPALOKI–JERO): en la descripción del ítem de terceros y en observaciones.
+    const note = noteForCompany(m.company, defaults.companyNotes);
+    if (note) {
+      const third = built.payload.items.find((i) => i.code === model.cfg.thirdPartyCode) ?? built.payload.items[0];
+      third.description = `${third.description ?? model.cfg.thirdPartyDescription}. ${note}`;
+    }
     built.payload.observations =
+      (note ? `${note} ` : "") +
       `${m.company} · Retiros del ${day(m.dateFrom)} al ${day(m.dateTo)}` +
       (m.withdrawals ? ` (${m.withdrawals} retiros)` : "") +
       ` · Movimiento ${m.rowNumber ?? m.id}`;

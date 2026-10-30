@@ -92,6 +92,11 @@ export default async function SiigoPage() {
                     <label className="label" htmlFor="newCustomerEmail">Correo de contacto para clientes nuevos (opcional)</label>
                     <input id="newCustomerEmail" name="newCustomerEmail" type="email" className="input" defaultValue={defaults.newCustomerEmail} placeholder="facturacion@tuempresa.com" />
                   </div>
+                  <div className="sm:col-span-2">
+                    <label className="label" htmlFor="companyNotes">Leyendas por empresa (descripción y observaciones de la factura)</label>
+                    <textarea id="companyNotes" name="companyNotes" rows={3} className="input font-mono text-xs" defaultValue={defaults.companyNotes} placeholder="KAUPALOKI: Se elabora bajo un contrato de mandato entre KAUPALOKI y JERO." />
+                    <p className="mt-1 text-xs text-slate-500">Una por línea: EMPRESA: texto. Se agrega a las facturas de los movimientos de esa empresa.</p>
+                  </div>
                 </div>
               </div>
               <Submit>Guardar valores</Submit>

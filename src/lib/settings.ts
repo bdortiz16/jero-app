@@ -42,6 +42,8 @@ export type SiigoDefaults = {
   newCustomerStateCode: string;
   newCustomerCityCode: string;
   newCustomerEmail: string;
+  /** Leyendas por empresa del archivo, una por línea: "EMPRESA: texto". Van en la descripción y observaciones. */
+  companyNotes: string;
 };
 
 export const DEFAULTS: SiigoDefaults = {
@@ -57,6 +59,7 @@ export const DEFAULTS: SiigoDefaults = {
   newCustomerStateCode: "11",
   newCustomerCityCode: "11001",
   newCustomerEmail: "",
+  companyNotes: "KAUPALOKI: Se elabora bajo un contrato de mandato entre KAUPALOKI y JERO.",
 };
 
 export async function getSiigoCredentials(): Promise<SiigoCredentials | null> {
@@ -68,6 +71,16 @@ export async function getSiigoCredentials(): Promise<SiigoCredentials | null> {
 export async function saveSiigoCredentials(c: SiigoCredentials) {
   await setSetting("siigo:credentials", { ...c, accessKey: await encrypt(c.accessKey) });
   await setSetting("siigo:token", null);
+}
+
+/** Leyenda configurada para una empresa del archivo (líneas "EMPRESA: texto"), o null. */
+export function noteForCompany(company: string, notes: string): string | null {
+  const key = company.trim().toLowerCase();
+  for (const line of notes.split(/\r?\n/)) {
+    const i = line.indexOf(":");
+    if (i > 0 && line.slice(0, i).trim().toLowerCase() === key) return line.slice(i + 1).trim() || null;
+  }
+  return null;
 }
 
 /** ¿Se puede facturar con esta conexión un movimiento de esta empresa? */

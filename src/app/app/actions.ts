@@ -325,6 +325,7 @@ export async function saveDefaults(_: ActionState, fd: FormData): Promise<Action
     newCustomerStateCode: String(fd.get("newCustomerStateCode") ?? "").trim() || "11",
     newCustomerCityCode: String(fd.get("newCustomerCityCode") ?? "").trim() || "11001",
     newCustomerEmail: String(fd.get("newCustomerEmail") ?? "").trim(),
+    companyNotes: String(fd.get("companyNotes") ?? "").trim(),
   };
   await setSetting("siigo:defaults", defaults);
   await audit(user, "siigo.defaults_saved", defaults);

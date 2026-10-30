@@ -1,3 +1,6 @@
+import { vi } from "vitest";
+vi.mock("server-only", () => ({}));
+vi.mock("@/db", () => ({ getDb: vi.fn(), schema: {} }));
 import { describe, expect, it } from "vitest";
 import { nitCheckDigit, parseIdentification, parseMovementRows, siigoName } from "@/lib/movements";
 import { parseFile } from "@/lib/batch/parse";
@@ -35,5 +38,15 @@ describe("movimientos", () => {
     expect(movements[0]).toMatchObject({ rowNumber: 1, company: "JERO", identification: "901970361", checkDigit: "3", personType: "Company", withdrawals: 68, amount: 3975272051.42 });
     expect(movements[1]).toMatchObject({ company: "KAUPALOKI", identification: "16934739", personType: "Person", amount: 80000 });
     expect(movements[1].dateFrom?.toISOString().slice(0, 10)).toBe("2026-10-16");
+  });
+});
+
+import { noteForCompany } from "@/lib/settings";
+describe("leyendas por empresa", () => {
+  const notes = "KAUPALOKI: Se elabora bajo un contrato de mandato entre KAUPALOKI y JERO.\nOTRA:  Texto otra";
+  it("encuentra la leyenda sin importar mayúsculas", () => {
+    expect(noteForCompany("Kaupaloki ", notes)).toBe("Se elabora bajo un contrato de mandato entre KAUPALOKI y JERO.");
+    expect(noteForCompany("OTRA", notes)).toBe("Texto otra");
+    expect(noteForCompany("JERO", notes)).toBeNull();
   });
 });
