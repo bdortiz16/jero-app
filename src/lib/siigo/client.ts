@@ -59,6 +59,7 @@ export class SiigoClient implements SiigoApi {
       if (cached && cached.expiresAt - 5 * 60_000 > Date.now()) return cached.token;
     }
     const res = await this.fetchImpl(`${this.cfg.baseUrl}/auth`, {
+      signal: AbortSignal.timeout(30_000),
       method: "POST",
       headers: { "Content-Type": "application/json", "Partner-Id": this.cfg.partnerId },
       body: JSON.stringify({ username: this.cfg.username, access_key: this.cfg.accessKey }),
@@ -80,6 +81,8 @@ export class SiigoClient implements SiigoApi {
       let res: Response;
       try {
         res = await this.fetchImpl(`${this.cfg.baseUrl}${path}`, {
+          // Siigo a veces tarda: nunca esperar más de 30 s por una respuesta.
+          signal: AbortSignal.timeout(30_000),
           method,
           headers: {
             "Content-Type": "application/json",

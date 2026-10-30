@@ -2,11 +2,10 @@ import { asc } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireUser } from "@/lib/session";
 import { getCatalogs } from "@/lib/siigo";
-import { syncProductsFromSiigo } from "@/lib/sync";
 import { DEFAULT_COMMISSION_CONFIG, type CommissionModelConfig } from "@/lib/batch/commission";
 import { Alert, PageHeader, StatusBadge } from "@/components/ui";
 import { ActionButton, ActionForm, Submit } from "@/components/forms";
-import { saveCommissionModel, toggleModel } from "../actions";
+import { saveCommissionModel, syncProducts, toggleModel } from "../actions";
 
 export const metadata = { title: "Modelos de negocio" };
 
@@ -16,22 +15,11 @@ export default async function ModelosPage({ searchParams }: { searchParams: Prom
   const db = await getDb();
   const loadProducts = () =>
     db.select({ code: schema.products.code, name: schema.products.name }).from(schema.products).orderBy(asc(schema.products.code));
-  const [models, initialProducts, catalogs] = await Promise.all([
+  const [models, products, catalogs] = await Promise.all([
     db.select().from(schema.businessModels).orderBy(asc(schema.businessModels.id)),
     loadProducts(),
     getCatalogs(),
   ]);
-  // Si aún no se han traído los productos de Siigo, se traen aquí mismo para poder elegir los ítems.
-  let products = initialProducts;
-  let syncError: string | null = null;
-  if (products.length === 0 && catalogs && user.role !== "USUARIO") {
-    try {
-      await syncProductsFromSiigo();
-      products = await loadProducts();
-    } catch (e) {
-      syncError = (e as Error).message;
-    }
-  }
   const isAdmin = user.role === "ADMIN";
   const editing = models.find((m) => String(m.id) === editar);
   const cfg = { ...DEFAULT_COMMISSION_CONFIG, ...((editing?.config ?? {}) as Partial<CommissionModelConfig>) };
@@ -95,9 +83,15 @@ export default async function ModelosPage({ searchParams }: { searchParams: Prom
             y la <b>comisión</b> con IVA; la retención en la fuente solo se aplica a personas jurídicas colombianas (NIT).
           </p>
           {!catalogs && <div className="mb-4"><Alert kind="warning">Primero conecta Siigo para cargar impuestos y formas de pago.</Alert></div>}
-          {syncError && <div className="mb-4"><Alert kind="error">No se pudieron traer los productos de Siigo: {syncError}</Alert></div>}
-          {!syncError && products.length === 0 && catalogs && (
-            <div className="mb-4"><Alert kind="warning">Tu Siigo no tiene productos creados. Crea en Siigo los productos 01 y 02 y recarga esta página.</Alert></div>
+          {catalogs && (
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
+              <span className="text-slate-600">
+                {products.length
+                  ? `${products.length} productos de Siigo disponibles para elegir.`
+                  : "Puedes escribir los códigos (01 y 02) o traer la lista de productos de Siigo."}
+              </span>
+              <ActionButton action={syncProducts}>{products.length ? "Actualizar productos" : "Traer productos de Siigo"}</ActionButton>
+            </div>
           )}
           <ActionForm action={saveCommissionModel} className="grid gap-4 sm:grid-cols-2">
             {editing && <input type="hidden" name="id" value={editing.id} />}
