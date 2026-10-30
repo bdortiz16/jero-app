@@ -49,12 +49,21 @@ export function releaseStuckSessions() {
           or (wait_event_type = 'Lock' and now() - query_start > interval '30 seconds')
         )`;
     for (const k of killed) await sql`select pg_terminate_backend(${k.pid})`;
-    let preventivo = "ok";
-    try {
-      await sql.unsafe(`alter role current_user set idle_in_transaction_session_timeout = '60s'`);
-    } catch (e) {
-      preventivo = `no se pudo configurar: ${(e as Error).message}`;
+    // Límites para que nada vuelva a quedarse colgado: aplican a las conexiones nuevas del usuario de la app.
+    const limits: Record<string, string> = {
+      idle_in_transaction_session_timeout: "60s",
+      lock_timeout: "10s",
+      statement_timeout: "30s",
+    };
+    const preventivo: Record<string, string> = {};
+    for (const [k, v] of Object.entries(limits)) {
+      try {
+        await sql.unsafe(`alter role current_user set ${k} = '${v}'`);
+        preventivo[k] = v;
+      } catch (e) {
+        preventivo[k] = `no se pudo: ${(e as Error).message}`;
+      }
     }
-    return { sesiones_liberadas: killed.length, limite_transacciones_colgadas: preventivo };
+    return { sesiones_liberadas: killed.length, limites: preventivo };
   });
 }

@@ -44,13 +44,32 @@ async function createLocal(): Promise<{ db: DB; ready: Promise<void> }> {
     const db = drizzlePostgres(client, { schema });
     // En Vercel (o con AUTO_MIGRATE=true) las tablas se crean/actualizan solas al arrancar: no depende del build.
     if (process.env.VERCEL || process.env.AUTO_MIGRATE === "true") {
-      const [{ migrate }, path] = await Promise.all([import("drizzle-orm/postgres-js/migrator"), import("node:path")]);
-      // Si la migración queda esperando un bloqueo, falla en vez de dejar todas las páginas cargando.
-      const ready = withTimeout(
-        migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") }),
-        20_000,
-        "La actualización de tablas está bloqueada. Abre /api/diagnostico?liberar=1 y recarga.",
-      );
+      const [{ migrate }, path, fs] = await Promise.all([
+        import("drizzle-orm/postgres-js/migrator"),
+        import("node:path"),
+        import("node:fs"),
+      ]);
+      const folder = path.join(process.cwd(), "drizzle");
+      const ready = (async () => {
+        // Si las tablas ya están al día no se abre ninguna transacción de migración (evita bloqueos en cada arranque).
+        try {
+          const journal = JSON.parse(fs.readFileSync(path.join(folder, "meta", "_journal.json"), "utf8")) as { entries: unknown[] };
+          const [{ n }] = await withTimeout(
+            client<{ n: number }[]>`select count(*)::int as n from drizzle.__drizzle_migrations`,
+            8_000,
+            "timeout",
+          );
+          if (n >= journal.entries.length) return;
+        } catch {
+          // Primera vez (no existe la tabla de migraciones) o no se pudo leer: se migra normalmente.
+        }
+        // Si la migración queda esperando un bloqueo, falla en vez de dejar todas las páginas cargando.
+        await withTimeout(
+          migrate(db, { migrationsFolder: folder }),
+          20_000,
+          "La actualización de tablas está bloqueada. Abre /api/diagnostico?liberar=1 y recarga.",
+        );
+      })();
       return { db, ready };
     }
     return { db, ready: Promise.resolve() };
