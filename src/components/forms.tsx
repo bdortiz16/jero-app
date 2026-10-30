@@ -1,16 +1,39 @@
 "use client";
-import { useActionState, useTransition, useState } from "react";
+import { useActionState, useEffect, useTransition, useState } from "react";
 import { useFormStatus } from "react-dom";
 import type { ActionState } from "@/app/app/actions";
 import { Alert } from "./ui";
 import { ConfirmModal } from "./modal";
 
+/** Aviso cuando una acción tarda demasiado (normalmente un bloqueo en la base de datos). */
+export function SlowHint({ pending, after = 15000 }: { pending: boolean; after?: number }) {
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    if (!pending) {
+      setSlow(false);
+      return;
+    }
+    const t = setTimeout(() => setSlow(true), after);
+    return () => clearTimeout(t);
+  }, [pending, after]);
+  if (!slow) return null;
+  return (
+    <span className="block max-w-sm text-xs text-amber-700">
+      Está tardando más de lo normal. Si no termina, abre{" "}
+      <a href="/api/diagnostico?liberar=1" target="_blank" rel="noopener" className="underline">liberar bloqueos</a> y vuelve a intentar.
+    </span>
+  );
+}
+
 export function Submit({ children, className = "btn-primary" }: { children: React.ReactNode; className?: string }) {
   const { pending } = useFormStatus();
   return (
-    <button type="submit" disabled={pending} className={className}>
-      {pending ? "Procesando…" : children}
-    </button>
+    <span className="inline-flex flex-col gap-1">
+      <button type="submit" disabled={pending} className={className}>
+        {pending ? "Procesando…" : children}
+      </button>
+      <SlowHint pending={pending} />
+    </span>
   );
 }
 
@@ -84,6 +107,7 @@ export function ActionButton({
       >
         {pending ? "Procesando…" : children}
       </button>
+      <SlowHint pending={pending} />
       {msg?.error && <span className="max-w-xs text-right text-xs text-red-600">{msg.error}</span>}
       {msg?.ok && <span className="text-xs text-emerald-700">{msg.ok}</span>}
     </span>
