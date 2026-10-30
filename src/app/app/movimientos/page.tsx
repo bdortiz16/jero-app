@@ -3,7 +3,7 @@ import { and, asc, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireUser } from "@/lib/session";
 import { companyAllowed, getSiigoDefaults, noteForCompany } from "@/lib/settings";
-import { getCatalogs } from "@/lib/siigo";
+import { getCatalogs, resolveDocumentId } from "@/lib/siigo";
 import { activeModel } from "@/lib/movements-emit";
 import { commissionFor } from "@/lib/batch/commission";
 import { rowsOf } from "@/lib/batch/process";
@@ -60,6 +60,14 @@ export default async function MovimientosPage({
         title="Movimientos"
         description={model ? `Se facturan con el modelo activo: ${model.name} (${model.cfg.defaultPct}% ${model.cfg.ivaIncluded ? "IVA incluido" : "+ IVA"}).` : "Carga el archivo de facturas por emitir y emite cada factura."}
       />
+      {model && !resolveDocumentId(defaults, catalogs) && (
+        <div className="mb-4">
+          <Alert kind="warning">
+            Falta elegir el <b>Tipo de comprobante</b> (factura de venta) antes de emitir.{" "}
+            <Link className="underline" href="/app/admin/siigo">Ir a Conexión Siigo → Valores por defecto</Link>, elígelo y pulsa Guardar valores.
+          </Alert>
+        </div>
+      )}
       {!model && <div className="mb-4"><Alert kind="warning">No hay un modelo de negocio activo. <Link className="underline" href="/app/modelos">Créalo aquí</Link> antes de emitir.</Alert></div>}
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">

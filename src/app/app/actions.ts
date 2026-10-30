@@ -9,7 +9,7 @@ import { audit } from "@/lib/audit";
 import { parseFile } from "@/lib/batch/parse";
 import { buildInvoices, parseNumber, type RawRow, type RowError } from "@/lib/batch/build";
 import { DEFAULT_COMMISSION_CONFIG, expandCommissionRows, type CommissionModelConfig } from "@/lib/batch/commission";
-import { getCatalogs, getSiigo, refreshCatalogs } from "@/lib/siigo";
+import { getCatalogs, getSiigo, refreshCatalogs, resolveDocumentId } from "@/lib/siigo";
 import { getSiigoDefaults, saveSiigoCredentials, setSetting, type SiigoDefaults } from "@/lib/settings";
 import { todayBogota } from "@/lib/format";
 
@@ -104,7 +104,7 @@ export async function uploadBatchRows(input: {
     }
 
     const { invoices, errors: buildErrors } = buildInvoices(rows, {
-      defaults,
+      defaults: { ...defaults, documentId: resolveDocumentId(defaults, catalogs) },
       taxes: catalogs?.taxes ?? [],
       paymentTypes: catalogs?.paymentTypes ?? [],
       productTaxes: new Map(products.map((p) => [p.code, p.taxIds])),

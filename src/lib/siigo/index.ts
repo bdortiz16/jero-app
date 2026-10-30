@@ -61,3 +61,15 @@ export async function refreshCatalogs(): Promise<Catalogs> {
 export async function getCatalogs(): Promise<Catalogs | null> {
   return getSetting<Catalogs>("siigo:catalogs");
 }
+
+/**
+ * Tipo de comprobante a usar: el configurado; si no hay, el único de factura de venta de Siigo,
+ * o el que sea "electrónica" cuando hay varios. null = hay que elegirlo en Conexión Siigo.
+ */
+export function resolveDocumentId(defaults: { documentId: number | null }, catalogs: Catalogs | null): number | null {
+  if (defaults.documentId) return defaults.documentId;
+  const docs = catalogs?.documentTypes ?? [];
+  if (docs.length === 1) return docs[0].id;
+  const electronic = docs.filter((d) => /electr/i.test(d.name));
+  return electronic.length === 1 ? electronic[0].id : null;
+}

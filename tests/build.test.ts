@@ -98,6 +98,6 @@ describe("buildInvoices", () => {
 
   it("requires a document type", () => {
     const r = buildInvoices([{ referencia: "x" }], ctx({ defaults: { ...ctx().defaults, documentId: null } }));
-    expect(r.errors[0].message).toMatch(/tipo de comprobante/);
+    expect(r.errors[0].message).toMatch(/Tipo de comprobante/);
   });
 });

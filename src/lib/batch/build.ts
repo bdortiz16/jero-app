@@ -167,7 +167,7 @@ export function buildInvoices(rows: RawRow[], ctx: BuildContext): { invoices: Bu
   const payments = new Map(ctx.paymentTypes.map((p) => [p.id, p]));
 
   if (!ctx.defaults.documentId) {
-    return { invoices: [], errors: [{ row: 0, message: "Falta configurar el tipo de comprobante (Admin → Siigo)." }] };
+    return { invoices: [], errors: [{ row: 0, message: "Falta elegir el Tipo de comprobante en Conexión Siigo → Valores por defecto (y pulsar Guardar valores)." }] };
   }
 
   type Group = { rows: number[]; first: RawRow; items: InvoiceItem[]; bad: boolean };
