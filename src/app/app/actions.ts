@@ -596,3 +596,68 @@ export async function listPendingMovements(filters: {
     .limit(5000);
   return rows.filter((r) => companyAllowed(r.company, defaults.issuerCompanies)).map((r) => ({ ...r, amount: Number(r.amount) }));
 }
+
+// ---------- Emisión masiva en segundo plano ----------
+
+async function requestOrigin() {
+  const { headers } = await import("next/headers");
+  const h = await headers();
+  return `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
+}
+
+/** Crea el trabajo con los movimientos pendientes del filtro y lanza la primera tanda en el servidor. */
+export async function startEmissionJob(filters: {
+  q?: string;
+  empresa?: string;
+  min?: string;
+  max?: string;
+  orden?: string;
+  incluirErrores?: boolean;
+}): Promise<{ jobId?: number; total?: number; error?: string }> {
+  const user = await requireEditor();
+  const { latestJob, isStalled, kickJob } = await import("@/lib/emission-jobs");
+  const running = await latestJob();
+  if (running?.status === "running" && !isStalled(running)) {
+    return { error: "Ya hay una emisión masiva en curso. Espera a que termine o deténla." };
+  }
+  const items = await listPendingMovements(filters);
+  if (!items.length) return { error: "No hay movimientos pendientes para emitir con estos filtros." };
+  const db = await getDb();
+  const origin = await requestOrigin();
+  const [job] = await db
+    .insert(schema.emissionJobs)
+    .values({
+      filters,
+      itemIds: items.map((i) => i.id),
+      total: items.length,
+      origin,
+      createdBy: user.id,
+      heartbeatAt: new Date(),
+    })
+    .returning({ id: schema.emissionJobs.id });
+  await audit(user, "emission_job.start", { jobId: job.id, total: items.length, filters });
+  const { after } = await import("next/server");
+  after(() => kickJob(job.id, origin));
+  return { jobId: job.id, total: items.length };
+}
+
+export async function cancelEmissionJob(jobId: number): Promise<ActionState> {
+  const user = await requireEditor();
+  const db = await getDb();
+  await db
+    .update(schema.emissionJobs)
+    .set({ status: "cancelled", finishedAt: new Date(), current: [] })
+    .where(and(eq(schema.emissionJobs.id, jobId), eq(schema.emissionJobs.status, "running")));
+  await audit(user, "emission_job.cancel", { jobId });
+  revalidatePath("/app/movimientos");
+  return { ok: "Emisión detenida" };
+}
+
+export async function resumeEmissionJob(jobId: number): Promise<ActionState> {
+  await requireEditor();
+  const { kickJob } = await import("@/lib/emission-jobs");
+  const db = await getDb();
+  await db.update(schema.emissionJobs).set({ lockedUntil: null, heartbeatAt: new Date() }).where(and(eq(schema.emissionJobs.id, jobId), eq(schema.emissionJobs.status, "running")));
+  await kickJob(jobId, await requestOrigin());
+  return { ok: "Reanudada" };
+}

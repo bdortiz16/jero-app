@@ -15,6 +15,7 @@ import { SummaryTable } from "@/components/modal";
 import { emitMovementAction } from "../actions";
 import { ImportMovementsForm } from "./import-form";
 import { BulkEmit } from "./bulk-emit";
+import { isStalled, latestJob } from "@/lib/emission-jobs";
 import { ClickableRow, SidePanel } from "@/components/row-and-panel";
 import { MovementDetail } from "./movement-detail";
 
@@ -40,7 +41,10 @@ export default async function MovimientosPage({
   const { q = "", empresa = "", estado = "", p = "1", min = "", max = "", orden = "", ver = "" } = await searchParams;
   const page = Math.max(1, Number(p) || 1);
   const db = await getDb();
-  const [defaults, model, catalogs] = await Promise.all([getSiigoDefaults(), activeModel(), getCatalogs()]);
+  const [defaults, model, catalogs, job] = await Promise.all([getSiigoDefaults(), activeModel(), getCatalogs(), latestJob()]);
+  // Se muestra la emisión en curso, o la última si terminó hace menos de 12 horas.
+  const showJob = job && (job.status === "running" || Date.now() - new Date(job.finishedAt ?? job.createdAt).getTime() < 12 * 3600_000);
+  const jobView = showJob ? (({ itemIds: _i, ...rest }) => ({ ...rest, stalled: isStalled(job) }))(job) : null;
   const ivaPct = catalogs?.taxes.find((t) => t.id === model?.cfg.ivaTaxId)?.percentage ?? 19;
   const retTax = catalogs?.taxes.find((t) => t.id === model?.cfg.retentionTaxId);
   const canEmit = user.role !== "USUARIO";
@@ -97,7 +101,7 @@ export default async function MovimientosPage({
         </div>
       )}
 
-      {canEmit && model && <BulkEmit filters={{ q, empresa, min, max, orden }} />}
+      {canEmit && model && <BulkEmit filters={{ q, empresa, min, max, orden }} initialJob={jobView} />}
 
       <form className="mb-4 flex flex-wrap gap-2">
         <input name="q" defaultValue={q} className="input max-w-xs" placeholder="Buscar cliente o identificación…" />

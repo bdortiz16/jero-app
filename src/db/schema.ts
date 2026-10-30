@@ -198,7 +198,34 @@ export const movements = pgTable(
   ],
 );
 
+/** Emisión masiva que corre en el servidor (en segundo plano), por tandas. */
+export const emissionJobs = pgTable("emission_jobs", {
+  id: serial("id").primaryKey(),
+  // running | done | cancelled | failed
+  status: text("status").notNull().default("running"),
+  filters: jsonb("filters").$type<Record<string, unknown>>().notNull().default({}),
+  // IDs de movimientos a emitir, en orden; cursor = siguiente posición
+  itemIds: jsonb("item_ids").$type<number[]>().notNull().default([]),
+  cursor: integer("cursor").notNull().default(0),
+  total: integer("total").notNull().default(0),
+  ok: integer("ok").notNull().default(0),
+  failed: integer("failed").notNull().default(0),
+  // Últimos resultados (para mostrar en pantalla) y los que se están emitiendo ahora
+  log: jsonb("log").$type<{ id: number; name: string; status: "ok" | "error"; text: string; at: string }[]>().notNull().default([]),
+  current: jsonb("current").$type<{ id: number; name: string; text: string }[]>().notNull().default([]),
+  // Segundos de trabajo efectivo (para calcular el ritmo y el tiempo estimado)
+  workSeconds: integer("work_seconds").notNull().default(0),
+  origin: text("origin"),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  heartbeatAt: timestamp("heartbeat_at", { withTimezone: true }),
+  error: text("error"),
+  createdBy: text("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  finishedAt: timestamp("finished_at", { withTimezone: true }),
+});
+
 export type User = typeof users.$inferSelect;
+export type EmissionJob = typeof emissionJobs.$inferSelect;
 export type Movement = typeof movements.$inferSelect;
 export type Invoice = typeof invoices.$inferSelect;
 export type InvoiceBatch = typeof invoiceBatches.$inferSelect;
