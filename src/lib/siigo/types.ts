@@ -13,6 +13,7 @@ export type SiigoDocumentType = {
   id: number;
   code: string;
   name: string;
+  description?: string;
   type: string; // FV, NC, RC...
   active: boolean;
   seller_by_item?: boolean;

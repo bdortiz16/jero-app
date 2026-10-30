@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/session";
 import { getSetting, getSiigoDefaults } from "@/lib/settings";
-import { getCatalogs, siigoMockEnabled } from "@/lib/siigo";
+import { getCatalogs, resolveDocumentId, siigoMockEnabled } from "@/lib/siigo";
 import { dateTime } from "@/lib/format";
 import { Alert, PageHeader } from "@/components/ui";
 import { ActionButton, ActionForm, Submit } from "@/components/forms";
@@ -13,6 +13,16 @@ export default async function SiigoPage() {
   const creds = await getSetting<{ username: string; partnerId: string }>("siigo:credentials");
   const defaults = await getSiigoDefaults();
   const catalogs = await getCatalogs();
+  // Preselección cuando hay una opción clara (el usuario solo confirma con Guardar valores).
+  const suggested = {
+    documentId: resolveDocumentId(defaults, catalogs),
+    sellerId: defaults.sellerId ?? (catalogs?.sellers.length === 1 ? catalogs.sellers[0].id : null),
+    paymentId:
+      defaults.paymentId ??
+      catalogs?.paymentTypes.find((p) => /transfer/i.test(p.name) && /d[eé]bito/i.test(p.name))?.id ??
+      (catalogs?.paymentTypes.length === 1 ? catalogs.paymentTypes[0].id : null),
+  };
+  const unsaved = !!catalogs && (!defaults.documentId || !defaults.sellerId || !defaults.paymentId);
 
   return (
     <>
@@ -57,9 +67,12 @@ export default async function SiigoPage() {
             <Alert>Guarda las credenciales para cargar tipos de comprobante, impuestos, formas de pago y vendedores.</Alert>
           ) : (
             <ActionForm action={saveDefaults} className="space-y-4">
-              <Select name="documentId" label="Tipo de comprobante (factura de venta)" value={defaults.documentId} options={catalogs.documentTypes.map((d) => [d.id, `${d.code} · ${d.name} (${d.id})`])} required />
-              <Select name="sellerId" label="Vendedor predeterminado" value={defaults.sellerId} options={catalogs.sellers.map((s) => [s.id, `${s.name} (${s.id})`])} required />
-              <Select name="paymentId" label="Forma de pago predeterminada" value={defaults.paymentId} options={catalogs.paymentTypes.map((p) => [p.id, `${p.name} · ${p.type} (${p.id})`])} required />
+              {unsaved && (
+                <Alert kind="warning">Elige los valores marcados y pulsa <b>Guardar valores</b>: sin ellos no se pueden emitir facturas.</Alert>
+              )}
+              <Select name="documentId" label="Tipo de comprobante (factura de venta)" value={suggested.documentId} options={catalogs.documentTypes.map((d) => [d.id, `${d.code} · ${d.name} (${d.id})`])} required />
+              <Select name="sellerId" label="Vendedor predeterminado" value={suggested.sellerId} options={catalogs.sellers.map((s) => [s.id, `${s.name} (${s.id})`])} required />
+              <Select name="paymentId" label="Forma de pago predeterminada" value={suggested.paymentId} options={catalogs.paymentTypes.map((p) => [p.id, `${p.name} · ${p.type} (${p.id})`])} required />
               <Select name="costCenterId" label="Centro de costo (opcional)" value={defaults.costCenterId} options={catalogs.costCenters.map((c) => [c.id, `${c.code} · ${c.name}`])} />
               <div>
                 <label className="label" htmlFor="dueDays">Días de plazo para pagos a crédito</label>
@@ -135,7 +148,7 @@ function Select({ name, label, value, options, required }: { name: string; label
     <div>
       <label className="label" htmlFor={name}>{label}</label>
       <select id={name} name={name} className="input" defaultValue={value ?? ""} required={required}>
-        <option value="">— Seleccione —</option>
+        <option value="">{options.length ? `— Seleccione (${options.length} opciones) —` : "— Sin opciones: pulse Actualizar catálogos —"}</option>
         {options.map(([id, text]) => <option key={id} value={id}>{text}</option>)}
       </select>
     </div>

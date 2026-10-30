@@ -47,11 +47,12 @@ export async function refreshCatalogs(): Promise<Catalogs> {
   const users = await s.users();
   const costCenters = await s.costCenters().catch(() => []);
   const catalogs: Catalogs = {
-    documentTypes: documentTypes.filter((d) => d.active).map((d) => ({ id: d.id, name: d.name, code: d.code })),
-    taxes: taxes.filter((t) => t.active),
-    paymentTypes: paymentTypes.filter((p) => p.active),
-    sellers: users.filter((u) => u.active).map((u) => ({ id: u.id, name: `${u.first_name} ${u.last_name}`.trim() || u.username })),
-    costCenters: costCenters.filter((c) => c.active).map((c) => ({ id: c.id, name: c.name, code: c.code })),
+    // Solo se ocultan los que Siigo marca explícitamente como inactivos (algunos no traen el campo "active").
+    documentTypes: (documentTypes ?? []).filter((d) => d.active !== false).map((d) => ({ id: d.id, name: d.name ?? d.description ?? `Comprobante ${d.code}`, code: d.code })),
+    taxes: (taxes ?? []).filter((t) => t.active !== false),
+    paymentTypes: (paymentTypes ?? []).filter((p) => p.active !== false),
+    sellers: (users ?? []).filter((u) => u.active !== false).map((u) => ({ id: u.id, name: `${u.first_name ?? ""} ${u.last_name ?? ""}`.trim() || u.username || u.email || `Vendedor ${u.id}` })),
+    costCenters: (costCenters ?? []).filter((c) => c.active !== false).map((c) => ({ id: c.id, name: c.name, code: c.code })),
     fetchedAt: new Date().toISOString(),
   };
   await setSetting("siigo:catalogs", catalogs);
