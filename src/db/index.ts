@@ -3,6 +3,7 @@ import { drizzle as drizzlePostgres } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import * as schema from "./schema";
 import { databaseUrl } from "./url";
+import { withTimeout } from "@/lib/timeout";
 
 type DB = ReturnType<typeof drizzlePostgres<typeof schema>>;
 
@@ -44,7 +45,13 @@ async function createLocal(): Promise<{ db: DB; ready: Promise<void> }> {
     // En Vercel (o con AUTO_MIGRATE=true) las tablas se crean/actualizan solas al arrancar: no depende del build.
     if (process.env.VERCEL || process.env.AUTO_MIGRATE === "true") {
       const [{ migrate }, path] = await Promise.all([import("drizzle-orm/postgres-js/migrator"), import("node:path")]);
-      return { db, ready: migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") }) };
+      // Si la migración queda esperando un bloqueo, falla en vez de dejar todas las páginas cargando.
+      const ready = withTimeout(
+        migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") }),
+        20_000,
+        "La actualización de tablas está bloqueada. Abre /api/diagnostico?liberar=1 y recarga.",
+      );
+      return { db, ready };
     }
     return { db, ready: Promise.resolve() };
   }

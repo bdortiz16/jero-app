@@ -2,10 +2,27 @@ import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
 import { supabaseConfig } from "@/lib/supabase/config";
 import { databaseSource, databaseUrl } from "@/db/url";
+import { dbActivity, releaseStuckSessions } from "@/lib/db-health";
+import { getAuthEmail } from "@/lib/auth";
+import { withTimeout } from "@/lib/timeout";
+
+export const maxDuration = 30;
+
+const timeout = <T,>(p: Promise<T>, ms: number) =>
+  withTimeout(p, ms, `sin respuesta en ${ms / 1000}s (posible bloqueo: usa ?liberar=1)`);
 
 // Revisa la configuración del despliegue sin revelar valores: solo indica qué falta.
-export async function GET() {
+export async function GET(req: Request) {
   const env = process.env;
+  // ?liberar=1 (con sesión iniciada): termina sesiones trabadas en la base.
+  if (new URL(req.url).searchParams.get("liberar")) {
+    if (!(await getAuthEmail().catch(() => null))) return Response.json({ error: "Inicia sesión en Jero primero" }, { status: 401 });
+    try {
+      return Response.json(await releaseStuckSessions());
+    } catch (e) {
+      return Response.json({ error: (e as Error).message }, { status: 500 });
+    }
+  }
   const supa = supabaseConfig();
     const encKey = env.ENCRYPTION_KEY?.trim().length ?? 0;
   const checks: Record<string, string> = {
@@ -34,10 +51,10 @@ export async function GET() {
   const t = performance.now();
   if (dbHint) checks.base_de_datos = dbHint;
   else try {
-    const db = await getDb();
+    const db = await timeout(getDb(), 12_000);
     tiempos.conexion_y_migraciones = `${Math.round(performance.now() - t)} ms`;
     const t2 = performance.now();
-    await db.execute(sql`select 1 from users limit 1`);
+    await timeout(db.execute(sql`select 1 from users limit 1`), 8_000);
     tiempos.consulta = `${Math.round(performance.now() - t2)} ms`;
     checks.base_de_datos = "ok";
   } catch (e) {
@@ -70,5 +87,11 @@ export async function GET() {
       tiempos.supabase_auth = `error: ${(e as Error).message}`;
     }
   }
-  return Response.json({ ok, plataforma: { ...plataforma, region: env.VERCEL_REGION ?? "?" }, conexion: databaseSource(), tiempos, checks }, { status: ok ? 200 : 500 });
+  let base: unknown = null;
+  if (!dbHint && databaseUrl()) {
+    const t4 = performance.now();
+    base = await dbActivity().catch((e) => ({ error: (e as Error).message }));
+    tiempos.revision_base = `${Math.round(performance.now() - t4)} ms`;
+  }
+  return Response.json({ ok, plataforma: { ...plataforma, region: env.VERCEL_REGION ?? "?" }, conexion: databaseSource(), tiempos, checks, base }, { status: ok ? 200 : 500 });
 }

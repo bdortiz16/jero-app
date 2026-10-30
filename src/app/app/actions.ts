@@ -64,6 +64,19 @@ export async function uploadBatch(_: ActionState, fd: FormData): Promise<ActionS
       params = { modelo: model.name, comision_pct: pct, iva_incluido: cfg.ivaIncluded };
     }
 
+    if (!modelId && !rows.some((r) => "referencia" in r || "producto_codigo" in r)) {
+      const looksLikeMovements = rows.slice(0, 10).some(
+        (r) =>
+          Object.keys(r).some((k) => /identificacion|facturas_por_emitir|valor_a_facturar/.test(k)) ||
+          Object.values(r).some((v) => typeof v === "string" && /identificaci[oó]n|facturas por emitir/i.test(v)),
+      );
+      return {
+        error: looksLikeMovements
+          ? "Este archivo es de movimientos (Facturas por emitir): súbelo en el menú Movimientos."
+          : "El archivo no tiene las columnas del formato estándar (referencia, cliente_nit, producto_codigo…). Descarga la plantilla o elige un modelo.",
+      };
+    }
+
     const { invoices, errors: buildErrors } = buildInvoices(rows, {
       defaults,
       taxes: catalogs?.taxes ?? [],

@@ -7,6 +7,8 @@ import { siigoMockEnabled } from "@/lib/siigo";
 
 // Todas las páginas de la app dependen del usuario: nunca se prerenderizan.
 export const dynamic = "force-dynamic";
+// Ninguna página o acción debe quedarse "procesando" indefinidamente.
+export const maxDuration = 60;
 
 const roleLabel = { ADMIN: "Administrador", CONTADOR: "Contador", USUARIO: "Consulta" } as const;
 
