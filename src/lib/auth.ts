@@ -1,4 +1,5 @@
 import "server-only";
+import { cache } from "react";
 import { cookies } from "next/headers";
 import { eq } from "drizzle-orm";
 import { getDb, schema } from "@/db";
@@ -19,7 +20,7 @@ const adminEmails = () =>
     .filter(Boolean);
 
 /** Correo del usuario autenticado (Supabase Auth), o null. */
-export async function getAuthEmail(): Promise<string | null> {
+export const getAuthEmail = cache(async function getAuthEmail(): Promise<string | null> {
   // Leer las cookies siempre: marca la página como dinámica (por usuario). Sin esto, si Supabase no está
   // configurado al construir, Next.js prerenderiza las páginas con el "redirigir al login" congelado.
   const store = await cookies();
@@ -29,15 +30,18 @@ export async function getAuthEmail(): Promise<string | null> {
   }
   if (!supabaseConfig()) return null;
   const supabase = await supabaseServer();
-  const { data } = await supabase.auth.getUser();
-  return data.user?.email_confirmed_at || data.user?.confirmed_at ? data.user.email!.toLowerCase() : null;
-}
+  // Supabase solo entrega sesión a correos confirmados; getClaims verifica la firma sin ir a la red cuando puede.
+  const { data } = await supabase.auth.getClaims();
+  const email = data?.claims?.email;
+  return typeof email === "string" && email ? email.toLowerCase() : null;
+});
 
 /**
  * Usuario de Jero (rol y estado) para el correo autenticado. Se crea al primer ingreso:
  * correos de ADMIN_EMAILS y el primer usuario quedan como administradores; el resto, pendientes.
  */
-export async function getSessionUser() {
+// Se memoriza por petición: el layout y la página comparten la misma consulta.
+export const getSessionUser = cache(async function getSessionUser() {
   const email = await getAuthEmail();
   if (!email) return null;
   const db = await getDb();
@@ -68,4 +72,4 @@ export async function getSessionUser() {
     .onConflictDoNothing()
     .returning();
   return u ?? (await db.query.users.findFirst({ where: eq(schema.users.email, email) }))!;
-}
+});

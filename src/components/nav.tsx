@@ -18,6 +18,7 @@ export function Nav({ sections }: { sections: { title?: string; items: Item[] }[
                 <li key={it.href}>
                   <Link
                     href={it.href}
+                    prefetch={false}
                     className={`block rounded-lg px-3 py-2 text-sm ${active ? "bg-white/15 font-medium text-white" : "text-brand-100 hover:bg-white/10"}`}
                   >
                     {it.label}

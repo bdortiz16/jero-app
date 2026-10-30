@@ -30,7 +30,16 @@ async function workersDb(): Promise<DB> {
 async function createLocal(): Promise<{ db: DB; ready: Promise<void> }> {
   const url = databaseUrl();
   if (url) {
-    const client = postgres(url, { max: process.env.VERCEL ? 1 : 5, prepare: false, onnotice: () => {} });
+    const client = postgres(url, {
+      max: process.env.VERCEL ? 3 : 5,
+      prepare: false,
+      onnotice: () => {},
+      // En serverless la instancia se congela entre peticiones y el pooler cierra las conexiones inactivas:
+      // sin estos límites, el driver reusa un socket muerto y la página se queda cargando.
+      idle_timeout: 20,
+      max_lifetime: 60 * 5,
+      connect_timeout: 10,
+    });
     const db = drizzlePostgres(client, { schema });
     // En Vercel (o con AUTO_MIGRATE=true) las tablas se crean/actualizan solas al arrancar: no depende del build.
     if (process.env.VERCEL || process.env.AUTO_MIGRATE === "true") {

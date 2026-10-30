@@ -15,6 +15,8 @@ export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
   const cfg = supabaseConfig();
   if (!cfg) return response;
+  // Las precargas de Next no necesitan renovar la sesión (evita viajes extra a Supabase).
+  if (request.headers.get("next-router-prefetch") || request.headers.get("purpose") === "prefetch") return response;
   const supabase = createServerClient(cfg.url, cfg.key, {
     cookies: {
       getAll: () => request.cookies.getAll(),
@@ -25,7 +27,8 @@ export async function proxy(request: NextRequest) {
       },
     },
   });
-  await supabase.auth.getUser();
+  // getClaims valida el token localmente (claves asimétricas) y solo va a la red para renovar la sesión.
+  await supabase.auth.getClaims();
   return response;
 }
 

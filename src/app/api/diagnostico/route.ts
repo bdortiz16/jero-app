@@ -30,10 +30,15 @@ export async function GET() {
       dbHint = "la URL no es válida: si la contraseña tiene símbolos (@ # / ? %) cámbiala en Supabase por una solo con letras y números";
     }
   }
+  const tiempos: Record<string, string> = {};
+  const t = performance.now();
   if (dbHint) checks.base_de_datos = dbHint;
   else try {
     const db = await getDb();
+    tiempos.conexion_y_migraciones = `${Math.round(performance.now() - t)} ms`;
+    const t2 = performance.now();
     await db.execute(sql`select 1 from users limit 1`);
+    tiempos.consulta = `${Math.round(performance.now() - t2)} ms`;
     checks.base_de_datos = "ok";
   } catch (e) {
     const msg = String((e as { cause?: Error }).cause?.message ?? (e as Error).message);
@@ -56,5 +61,14 @@ export async function GET() {
   const plataforma = env.VERCEL
     ? { proveedor: "Vercel", entorno: env.VERCEL_ENV ?? "?", rama: env.VERCEL_GIT_COMMIT_REF ?? "?" }
     : { proveedor: "Cloudflare/otro" };
-  return Response.json({ ok, plataforma, conexion: databaseSource(), checks }, { status: ok ? 200 : 500 });
+  if (supa) {
+    const t3 = performance.now();
+    try {
+      await fetch(`${supa.url}/auth/v1/health`, { headers: { apikey: supa.key }, signal: AbortSignal.timeout(8000) });
+      tiempos.supabase_auth = `${Math.round(performance.now() - t3)} ms`;
+    } catch (e) {
+      tiempos.supabase_auth = `error: ${(e as Error).message}`;
+    }
+  }
+  return Response.json({ ok, plataforma: { ...plataforma, region: env.VERCEL_REGION ?? "?" }, conexion: databaseSource(), tiempos, checks }, { status: ok ? 200 : 500 });
 }
