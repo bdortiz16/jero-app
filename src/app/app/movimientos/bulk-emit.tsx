@@ -13,7 +13,10 @@ const money = (n: number) => n.toLocaleString("es-CO", { style: "currency", curr
 // Dos a la vez: rápido sin chocar con el límite de peticiones de Siigo.
 const PARALLEL = 2;
 
-export function BulkEmit({ q, empresa }: { q: string; empresa: string }) {
+type Filters = { q: string; empresa: string; min: string; max: string; orden: string };
+
+export function BulkEmit({ filters }: { filters: Filters }) {
+  const { q, empresa, min, max, orden } = filters;
   const router = useRouter();
   const [phase, setPhase] = useState<"idle" | "loading" | "running" | "stopping" | "done">("idle");
   const [total, setTotal] = useState(0);
@@ -36,7 +39,7 @@ export function BulkEmit({ q, empresa }: { q: string; empresa: string }) {
     setPhase("loading");
     let items: Item[];
     try {
-      items = await listPendingMovements({ q, empresa, incluirErrores });
+      items = await listPendingMovements({ q, empresa, min, max, orden, incluirErrores });
     } catch (e) {
       setPhase("idle");
       setMessage((e as Error).message);
@@ -47,7 +50,16 @@ export function BulkEmit({ q, empresa }: { q: string; empresa: string }) {
       setMessage(incluirErrores ? "No hay movimientos pendientes ni con error para emitir." : "No hay movimientos pendientes para emitir con estos filtros.");
       return;
     }
-    const filtro = [empresa && `empresa ${empresa}`, q && `búsqueda "${q}"`].filter(Boolean).join(", ");
+    const filtro = [
+      empresa && `empresa ${empresa}`,
+      q && `búsqueda "${q}"`,
+      min && `desde ${money(Number(min.replace(/[.$\s]/g, "")))}`,
+      max && `hasta ${money(Number(max.replace(/[.$\s]/g, "")))}`,
+      orden === "menor" && "de menor a mayor valor",
+      orden === "mayor" && "de mayor a menor valor",
+    ]
+      .filter(Boolean)
+      .join(", ");
     setPendingRun({ items, filtro });
     setPhase("idle");
   }
@@ -129,7 +141,7 @@ export function BulkEmit({ q, empresa }: { q: string; empresa: string }) {
         <div>
           <h2 className="font-semibold">Emisión masiva</h2>
           <p className="text-sm text-slate-500">
-            Emite en Siigo todos los movimientos pendientes{empresa || q ? " que coinciden con el filtro actual" : ""}, uno tras otro.
+            Emite en Siigo todos los movimientos pendientes{empresa || q || min || max ? " que coinciden con el filtro actual" : ""}{orden === "menor" ? ", empezando por el de menor valor" : orden === "mayor" ? ", empezando por el de mayor valor" : ""}, uno tras otro.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">

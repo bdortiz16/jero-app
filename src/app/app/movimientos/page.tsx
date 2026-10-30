@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { and, asc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
+import { and, asc, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireUser } from "@/lib/session";
 import { companyAllowed, getSiigoDefaults, noteForCompany } from "@/lib/settings";
@@ -7,6 +7,7 @@ import { getCatalogs } from "@/lib/siigo";
 import { activeModel } from "@/lib/movements-emit";
 import { commissionFor } from "@/lib/batch/commission";
 import { rowsOf } from "@/lib/batch/process";
+import { movementOrder, movementWhere } from "@/lib/movement-filters";
 import { money, round2 } from "@/lib/format";
 import { Alert, PageHeader, Pager, Stat } from "@/components/ui";
 import { ActionButton } from "@/components/forms";
@@ -31,10 +32,10 @@ const statusStyle: Record<string, string> = {
 export default async function MovimientosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; empresa?: string; estado?: string; p?: string }>;
+  searchParams: Promise<{ q?: string; empresa?: string; estado?: string; p?: string; min?: string; max?: string; orden?: string }>;
 }) {
   const user = await requireUser();
-  const { q = "", empresa = "", estado = "", p = "1" } = await searchParams;
+  const { q = "", empresa = "", estado = "", p = "1", min = "", max = "", orden = "" } = await searchParams;
   const page = Math.max(1, Number(p) || 1);
   const db = await getDb();
   const [defaults, model, catalogs] = await Promise.all([getSiigoDefaults(), activeModel(), getCatalogs()]);
@@ -42,22 +43,16 @@ export default async function MovimientosPage({
   const retTax = catalogs?.taxes.find((t) => t.id === model?.cfg.retentionTaxId);
   const canEmit = user.role !== "USUARIO";
 
-  const where: SQL[] = [];
-  if (empresa) where.push(eq(schema.movements.company, empresa));
-  if (estado) where.push(eq(schema.movements.status, estado));
-  if (q) {
-    const like = `%${q}%`;
-    where.push(or(ilike(schema.movements.customerName, like), ilike(schema.movements.identificationRaw, like))!);
-  }
+  const where = movementWhere({ q, empresa, estado, min, max });
   const cond = where.length ? and(...where) : undefined;
   const [rows, companies, totals] = await Promise.all([
-    db.select().from(schema.movements).where(cond).orderBy(asc(schema.movements.rowNumber), asc(schema.movements.id)).limit(PAGE + 1).offset((page - 1) * PAGE),
+    db.select().from(schema.movements).where(cond).orderBy(...movementOrder(orden)).limit(PAGE + 1).offset((page - 1) * PAGE),
     db.selectDistinct({ company: schema.movements.company }).from(schema.movements).orderBy(asc(schema.movements.company)),
     db.execute(sql`select status, count(*)::int as n, coalesce(sum(amount),0)::float8 as total from movements group by status`),
   ]);
   const by = Object.fromEntries(rowsOf<{ status: string; n: number; total: number }>(totals).map((t) => [t.status, t]));
   const href = (n: number, extra: Record<string, string> = {}) =>
-    `/app/movimientos?${new URLSearchParams({ q, empresa, estado, p: String(n), ...extra })}`;
+    `/app/movimientos?${new URLSearchParams({ q, empresa, estado, min, max, orden, p: String(n), ...extra })}`;
 
   return (
     <>
@@ -84,7 +79,7 @@ export default async function MovimientosPage({
         </div>
       )}
 
-      {canEmit && model && <BulkEmit q={q} empresa={empresa} />}
+      {canEmit && model && <BulkEmit filters={{ q, empresa, min, max, orden }} />}
 
       <form className="mb-4 flex flex-wrap gap-2">
         <input name="q" defaultValue={q} className="input max-w-xs" placeholder="Buscar cliente o identificación…" />
@@ -98,7 +93,15 @@ export default async function MovimientosPage({
           <option value="facturado">Facturados</option>
           <option value="error">Con error</option>
         </select>
+        <select name="orden" defaultValue={orden} className="input max-w-[190px]" aria-label="Ordenar">
+          <option value="">Orden del archivo</option>
+          <option value="menor">Menor valor primero</option>
+          <option value="mayor">Mayor valor primero</option>
+        </select>
+        <input name="min" defaultValue={min} inputMode="numeric" className="input max-w-[150px]" placeholder="Valor desde" aria-label="Valor desde" />
+        <input name="max" defaultValue={max} inputMode="numeric" className="input max-w-[150px]" placeholder="Valor hasta" aria-label="Valor hasta" />
         <button className="btn-secondary">Filtrar</button>
+        {(q || empresa || estado || min || max || orden) && <Link href="/app/movimientos" className="btn-secondary">Limpiar</Link>}
       </form>
 
       <div className="card overflow-x-auto p-0">

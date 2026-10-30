@@ -532,22 +532,28 @@ export async function emitMovementAction(movementId: number, opts: { quiet?: boo
 }
 
 /** Movimientos pendientes (según filtros) que se pueden emitir con esta conexión, para la emisión masiva. */
-export async function listPendingMovements(filters: { q?: string; empresa?: string; incluirErrores?: boolean }) {
+export async function listPendingMovements(filters: {
+  q?: string;
+  empresa?: string;
+  min?: string;
+  max?: string;
+  orden?: string;
+  incluirErrores?: boolean;
+}) {
   await requireEditor();
   const { companyAllowed } = await import("@/lib/settings");
+  const { movementOrder, movementWhere } = await import("@/lib/movement-filters");
   const db = await getDb();
   const defaults = await getSiigoDefaults();
-  const where = [inArray(schema.movements.status, filters.incluirErrores ? ["pendiente", "error"] : ["pendiente"])];
-  if (filters.empresa) where.push(eq(schema.movements.company, filters.empresa));
-  if (filters.q) {
-    const like = `%${filters.q}%`;
-    where.push(or(ilike(schema.movements.customerName, like), ilike(schema.movements.identificationRaw, like))!);
-  }
+  const where = [
+    inArray(schema.movements.status, filters.incluirErrores ? ["pendiente", "error"] : ["pendiente"]),
+    ...movementWhere({ q: filters.q, empresa: filters.empresa, min: filters.min, max: filters.max }),
+  ];
   const rows = await db
     .select({ id: schema.movements.id, name: schema.movements.customerName, company: schema.movements.company, amount: schema.movements.amount, rowNumber: schema.movements.rowNumber })
     .from(schema.movements)
     .where(and(...where))
-    .orderBy(asc(schema.movements.rowNumber), asc(schema.movements.id))
+    .orderBy(...movementOrder(filters.orden))
     .limit(5000);
   return rows.filter((r) => companyAllowed(r.company, defaults.issuerCompanies)).map((r) => ({ ...r, amount: Number(r.amount) }));
 }
