@@ -5,7 +5,7 @@ import { getCatalogs } from "@/lib/siigo";
 import { DEFAULT_COMMISSION_CONFIG, type CommissionModelConfig } from "@/lib/batch/commission";
 import { Alert, PageHeader, StatusBadge } from "@/components/ui";
 import { ActionButton, ActionForm, Submit } from "@/components/forms";
-import { saveCommissionModel, syncProducts, toggleModel } from "../actions";
+import { saveCommissionModel, syncAllFromSiigo, toggleModel } from "../actions";
 
 export const metadata = { title: "Modelos de negocio" };
 
@@ -86,11 +86,11 @@ export default async function ModelosPage({ searchParams }: { searchParams: Prom
           {catalogs && (
             <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm">
               <span className="text-slate-600">
-                {products.length
-                  ? `${products.length} productos de Siigo disponibles para elegir.`
-                  : "Puedes escribir los códigos (01 y 02) o traer la lista de productos de Siigo."}
+                {products.length ? `${products.length} productos` : "Sin productos"} · {catalogs.paymentTypes.length} medios de pago ·{" "}
+                {catalogs.taxes.length} impuestos
+                <span className="block text-xs text-slate-400">Actualizado de Siigo: {new Date(catalogs.fetchedAt).toLocaleString("es-CO", { timeZone: "America/Bogota", dateStyle: "short", timeStyle: "short" })}</span>
               </span>
-              <ActionButton action={syncProducts}>{products.length ? "Actualizar productos" : "Traer productos de Siigo"}</ActionButton>
+              <ActionButton action={syncAllFromSiigo}>Actualizar desde Siigo</ActionButton>
             </div>
           )}
           <ActionForm action={saveCommissionModel} className="grid gap-4 sm:grid-cols-2">

@@ -272,6 +272,25 @@ export async function syncProducts(): Promise<ActionState> {
   }
 }
 
+/** Trae de Siigo productos y catálogos (medios de pago, impuestos, vendedores, comprobantes) de una vez. */
+export async function syncAllFromSiigo(): Promise<ActionState> {
+  const user = await requireEditor();
+  try {
+    const catalogs = await refreshCatalogs();
+    const { syncProductsFromSiigo } = await import("@/lib/sync");
+    const products = await syncProductsFromSiigo();
+    await audit(user, "siigo.sync_all", { products, payments: catalogs.paymentTypes.length, taxes: catalogs.taxes.length });
+    revalidatePath("/app/modelos");
+    revalidatePath("/app/admin/siigo");
+    revalidatePath("/app/productos");
+    return {
+      ok: `Actualizado: ${products} productos, ${catalogs.paymentTypes.length} medios de pago, ${catalogs.taxes.length} impuestos, ${catalogs.sellers.length} vendedores`,
+    };
+  } catch (e) {
+    return { error: errMsg(e) };
+  }
+}
+
 // ---------- Administración ----------
 
 export async function saveSiigoConnection(_: ActionState, fd: FormData): Promise<ActionState> {
