@@ -5,6 +5,7 @@ import { databaseSource, databaseUrl } from "@/db/url";
 import { dbActivity, releaseStuckSessions } from "@/lib/db-health";
 import { getAuthEmail } from "@/lib/auth";
 import { withTimeout } from "@/lib/timeout";
+import { recentServerErrors } from "@/lib/error-log";
 
 export const maxDuration = 30;
 
@@ -93,5 +94,7 @@ export async function GET(req: Request) {
     base = await dbActivity().catch((e) => ({ error: (e as Error).message }));
     tiempos.revision_base = `${Math.round(performance.now() - t4)} ms`;
   }
-  return Response.json({ ok, plataforma: { ...plataforma, region: env.VERCEL_REGION ?? "?" }, conexion: databaseSource(), tiempos, checks, base }, { status: ok ? 200 : 500 });
+  // Últimos errores del servidor (solo con sesión iniciada: pueden contener detalles internos).
+  const errores = (await getAuthEmail().catch(() => null)) ? await recentServerErrors() : "inicia sesión para verlos";
+  return Response.json({ ok, plataforma: { ...plataforma, region: env.VERCEL_REGION ?? "?" }, conexion: databaseSource(), tiempos, checks, base, errores }, { status: ok ? 200 : 500 });
 }
