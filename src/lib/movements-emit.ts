@@ -3,7 +3,7 @@ import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Movement } from "@/db/schema";
 import { getCatalogs, getSiigo, type SiigoApi } from "./siigo";
-import { getSiigoDefaults, type SiigoDefaults } from "./settings";
+import { companyAllowed, getSiigoDefaults, type SiigoDefaults } from "./settings";
 import { buildInvoices, toSiigoRequest } from "./batch/build";
 import { DEFAULT_COMMISSION_CONFIG, expandCommissionRows, type CommissionModelConfig } from "./batch/commission";
 import { siigoName } from "./movements";
@@ -86,8 +86,8 @@ export async function emitMovement(movementId: number, userId: string): Promise<
 
   try {
     const defaults = await getSiigoDefaults();
-    if (m.company.trim().toLowerCase() !== defaults.issuerCompany.trim().toLowerCase()) {
-      throw await fail(`Este movimiento lo factura "${m.company}" y esta conexión de Siigo es de "${defaults.issuerCompany}".`);
+    if (!companyAllowed(m.company, defaults.issuerCompanies)) {
+      throw await fail(`Los movimientos de "${m.company}" no están habilitados para esta conexión de Siigo (Conexión Siigo → Movimientos).`);
     }
     const model = await activeModel();
     if (!model) throw await fail("No hay un modelo de negocio activo. Créalo en Modelos de negocio.");
@@ -125,7 +125,9 @@ export async function emitMovement(movementId: number, userId: string): Promise<
     const built = invoices[0];
     if (!built) throw await fail([...exp.errors, ...errors].map((e) => e.message).join(" · ") || "No se pudo armar la factura");
     built.payload.observations =
-      `Retiros del ${day(m.dateFrom)} al ${day(m.dateTo)}` + (m.withdrawals ? ` (${m.withdrawals} retiros)` : "") + ` · Movimiento ${m.rowNumber ?? m.id}`;
+      `${m.company} · Retiros del ${day(m.dateFrom)} al ${day(m.dateTo)}` +
+      (m.withdrawals ? ` (${m.withdrawals} retiros)` : "") +
+      ` · Movimiento ${m.rowNumber ?? m.id}`;
 
     const [inv] = await db
       .insert(schema.invoices)

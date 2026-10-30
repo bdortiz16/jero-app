@@ -3,6 +3,7 @@ import { useActionState, useTransition, useState } from "react";
 import { useFormStatus } from "react-dom";
 import type { ActionState } from "@/app/app/actions";
 import { Alert } from "./ui";
+import { ConfirmModal } from "./modal";
 
 export function Submit({ children, className = "btn-primary" }: { children: React.ReactNode; className?: string }) {
   const { pending } = useFormStatus();
@@ -39,30 +40,47 @@ export function ActionButton({
   children,
   className = "btn-secondary",
   confirm,
+  confirmTitle = "¿Confirmas?",
+  confirmLabel = "Confirmar",
 }: {
   action: () => Promise<ActionState | void>;
   children: React.ReactNode;
   className?: string;
-  confirm?: string;
+  /** Texto o contenido de la ventana de confirmación (si se indica, se pide confirmar antes). */
+  confirm?: React.ReactNode;
+  confirmTitle?: string;
+  confirmLabel?: string;
 }) {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<ActionState>(null);
+  const [asking, setAsking] = useState(false);
+  const run = () =>
+    start(async () => {
+      try {
+        setMsg((await action()) ?? null);
+      } catch (e) {
+        setMsg({ error: (e as Error).message });
+      }
+    });
   return (
     <span className="inline-flex flex-col items-end gap-1">
+      <ConfirmModal
+        open={asking}
+        title={confirmTitle}
+        confirmLabel={confirmLabel}
+        onCancel={() => setAsking(false)}
+        onConfirm={() => {
+          setAsking(false);
+          run();
+        }}
+      >
+        {typeof confirm === "string" ? <p className="whitespace-pre-line">{confirm}</p> : confirm}
+      </ConfirmModal>
       <button
         type="button"
         className={className}
         disabled={pending}
-        onClick={() => {
-          if (confirm && !window.confirm(confirm)) return;
-          start(async () => {
-            try {
-              setMsg((await action()) ?? null);
-            } catch (e) {
-              setMsg({ error: (e as Error).message });
-            }
-          });
-        }}
+        onClick={() => (confirm ? setAsking(true) : run())}
       >
         {pending ? "Procesando…" : children}
       </button>

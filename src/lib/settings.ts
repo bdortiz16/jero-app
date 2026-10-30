@@ -32,8 +32,11 @@ export type SiigoDefaults = {
   dueDays: number;
   sendStamp: boolean;
   sendMail: boolean;
-  /** Empresa que factura con esta conexión de Siigo (columna "Empresa que factura" de los movimientos). */
-  issuerCompany: string;
+  /**
+   * Empresas del archivo de movimientos que se facturan con esta conexión de Siigo,
+   * separadas por coma ("*" = todas).
+   */
+  issuerCompanies: string;
   /** Datos para crear en Siigo los clientes que no existan (el archivo no trae dirección ni ciudad). */
   newCustomerAddress: string;
   newCustomerStateCode: string;
@@ -49,7 +52,7 @@ export const DEFAULTS: SiigoDefaults = {
   dueDays: 30,
   sendStamp: true,
   sendMail: true,
-  issuerCompany: "JERO",
+  issuerCompanies: "*",
   newCustomerAddress: "Sin dirección",
   newCustomerStateCode: "11",
   newCustomerCityCode: "11001",
@@ -65,6 +68,12 @@ export async function getSiigoCredentials(): Promise<SiigoCredentials | null> {
 export async function saveSiigoCredentials(c: SiigoCredentials) {
   await setSetting("siigo:credentials", { ...c, accessKey: await encrypt(c.accessKey) });
   await setSetting("siigo:token", null);
+}
+
+/** ¿Se puede facturar con esta conexión un movimiento de esta empresa? */
+export function companyAllowed(company: string, issuerCompanies: string) {
+  const list = issuerCompanies.split(",").map((c) => c.trim().toLowerCase()).filter(Boolean);
+  return list.length === 0 || list.includes("*") || list.includes(company.trim().toLowerCase());
 }
 
 export async function getSiigoDefaults(): Promise<SiigoDefaults> {

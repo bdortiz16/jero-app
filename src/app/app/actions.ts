@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireAdmin, requireEditor } from "@/lib/session";
 import { audit } from "@/lib/audit";
@@ -320,7 +320,7 @@ export async function saveDefaults(_: ActionState, fd: FormData): Promise<Action
     dueDays: Math.max(0, Number(fd.get("dueDays") ?? 30) || 0),
     sendStamp: fd.get("sendStamp") === "on",
     sendMail: fd.get("sendMail") === "on",
-    issuerCompany: String(fd.get("issuerCompany") ?? "").trim() || "JERO",
+    issuerCompanies: String(fd.get("issuerCompanies") ?? "").trim() || "*",
     newCustomerAddress: String(fd.get("newCustomerAddress") ?? "").trim() || "Sin dirección",
     newCustomerStateCode: String(fd.get("newCustomerStateCode") ?? "").trim() || "11",
     newCustomerCityCode: String(fd.get("newCustomerCityCode") ?? "").trim() || "11001",
@@ -512,16 +512,41 @@ export async function importMovementsChunk(input: {
   }
 }
 
-export async function emitMovementAction(movementId: number): Promise<ActionState> {
+export async function emitMovementAction(movementId: number, opts: { quiet?: boolean } = {}): Promise<ActionState & { number?: string }> {
   const user = await requireEditor();
   try {
     const { emitMovement } = await import("@/lib/movements-emit");
     const number = await emitMovement(movementId, user.id);
     await audit(user, "movement.emit", { movementId, invoice: number });
-    revalidatePath("/app/movimientos");
-    return { ok: `Factura ${number} emitida` };
+    // En la emisión masiva la página se refresca una sola vez al final.
+    if (!opts.quiet) {
+      revalidatePath("/app/movimientos");
+      revalidatePath(`/app/movimientos/${movementId}`);
+    }
+    return { ok: `Factura ${number} emitida`, number };
   } catch (e) {
-    revalidatePath("/app/movimientos");
+    if (!opts.quiet) revalidatePath("/app/movimientos");
     return { error: errMsg(e) };
   }
+}
+
+/** Movimientos pendientes (según filtros) que se pueden emitir con esta conexión, para la emisión masiva. */
+export async function listPendingMovements(filters: { q?: string; empresa?: string; incluirErrores?: boolean }) {
+  await requireEditor();
+  const { companyAllowed } = await import("@/lib/settings");
+  const db = await getDb();
+  const defaults = await getSiigoDefaults();
+  const where = [inArray(schema.movements.status, filters.incluirErrores ? ["pendiente", "error"] : ["pendiente"])];
+  if (filters.empresa) where.push(eq(schema.movements.company, filters.empresa));
+  if (filters.q) {
+    const like = `%${filters.q}%`;
+    where.push(or(ilike(schema.movements.customerName, like), ilike(schema.movements.identificationRaw, like))!);
+  }
+  const rows = await db
+    .select({ id: schema.movements.id, name: schema.movements.customerName, company: schema.movements.company, amount: schema.movements.amount, rowNumber: schema.movements.rowNumber })
+    .from(schema.movements)
+    .where(and(...where))
+    .orderBy(asc(schema.movements.rowNumber), asc(schema.movements.id))
+    .limit(5000);
+  return rows.filter((r) => companyAllowed(r.company, defaults.issuerCompanies)).map((r) => ({ ...r, amount: Number(r.amount) }));
 }

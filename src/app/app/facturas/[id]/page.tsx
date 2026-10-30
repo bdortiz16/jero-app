@@ -24,7 +24,13 @@ export default async function FacturaPage({ params }: { params: Promise<{ id: st
       <PageHeader
         title={inv.siigoNumber ? `Factura ${inv.siigoNumber}` : `Factura ${inv.reference}`}
         description={`Referencia ${inv.reference} · creada ${dateTime(inv.createdAt)}`}
-        actions={inv.batchId && <Link href={`/app/masiva/${inv.batchId}`} className="btn-secondary">Ver lote #{inv.batchId}</Link>}
+        actions={
+          <>
+            {inv.siigoId && <a className="btn-primary" href={`/api/facturas/${inv.id}/pdf`} target="_blank" rel="noopener">Ver PDF de Siigo</a>}
+            {inv.siigoId && <a className="btn-secondary" href={`/api/facturas/${inv.id}/pdf?descargar=1`}>Descargar PDF</a>}
+            {inv.batchId && <Link href={`/app/masiva/${inv.batchId}`} className="btn-secondary">Ver lote #{inv.batchId}</Link>}
+          </>
+        }
       />
       {inv.error && <div className="mb-6"><Alert kind={inv.status === "error" ? "error" : "warning"}>{inv.error}</Alert></div>}
       <div className="grid gap-6 lg:grid-cols-3">

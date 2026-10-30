@@ -42,7 +42,8 @@ export interface SiigoApi {
   createCustomer(body: SiigoCustomerRequest): Promise<SiigoCustomer>;
   createInvoice(body: SiigoInvoiceRequest, idempotencyKey?: string): Promise<SiigoInvoiceResponse>;
   getInvoice(id: string): Promise<SiigoInvoiceResponse>;
-  invoicePdfUrl?(id: string): Promise<string | null>;
+  /** PDF de la factura generado por Siigo (null si Siigo no lo entrega). */
+  invoicePdf(id: string): Promise<Uint8Array | null>;
 }
 
 export class SiigoClient implements SiigoApi {
@@ -161,10 +162,10 @@ export class SiigoClient implements SiigoApi {
   getInvoice(id: string) {
     return this.request<SiigoInvoiceResponse>("GET", `/v1/invoices/${encodeURIComponent(id)}`);
   }
-  async invoicePdfUrl(id: string) {
-    const r = await this.request<{ base64?: string; url?: string }>("GET", `/v1/invoices/${encodeURIComponent(id)}/pdf`);
-    if (r.url) return r.url;
-    return r.base64 ? `data:application/pdf;base64,${r.base64}` : null;
+  async invoicePdf(id: string) {
+    // Siigo responde { id, base64 } con el PDF codificado.
+    const r = await this.request<{ base64?: string }>("GET", `/v1/invoices/${encodeURIComponent(id)}/pdf`);
+    return r?.base64 ? new Uint8Array(Buffer.from(r.base64, "base64")) : null;
   }
 }
 

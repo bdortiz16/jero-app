@@ -69,11 +69,12 @@ export default async function SiigoPage() {
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="sendMail" defaultChecked={defaults.sendMail} /> Enviar la factura por correo al cliente</label>
               <div className="border-t border-slate-200 pt-4">
                 <h3 className="mb-1 text-sm font-semibold">Movimientos</h3>
-                <p className="mb-3 text-xs text-slate-500">Solo se emiten los movimientos de esta empresa. Los clientes que no existan se crean en Siigo con estos datos.</p>
+                <p className="mb-3 text-xs text-slate-500">Los clientes que no existan se crean en Siigo con estos datos.</p>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div>
-                    <label className="label" htmlFor="issuerCompany">Empresa que factura (como en el archivo)</label>
-                    <input id="issuerCompany" name="issuerCompany" className="input" defaultValue={defaults.issuerCompany} />
+                    <label className="label" htmlFor="issuerCompanies">Empresas del archivo que se facturan aquí</label>
+                    <input id="issuerCompanies" name="issuerCompanies" className="input" defaultValue={defaults.issuerCompanies} placeholder="* = todas" />
+                    <p className="mt-1 text-xs text-slate-500">* = todas, o separadas por coma (ej. JERO, KAUPALOKI)</p>
                   </div>
                   <div>
                     <label className="label" htmlFor="newCustomerAddress">Dirección para clientes nuevos</label>

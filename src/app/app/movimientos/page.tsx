@@ -2,7 +2,7 @@ import Link from "next/link";
 import { and, asc, eq, ilike, or, sql, type SQL } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireUser } from "@/lib/session";
-import { getSiigoDefaults } from "@/lib/settings";
+import { companyAllowed, getSiigoDefaults } from "@/lib/settings";
 import { getCatalogs } from "@/lib/siigo";
 import { activeModel } from "@/lib/movements-emit";
 import { commissionFor } from "@/lib/batch/commission";
@@ -10,8 +10,10 @@ import { rowsOf } from "@/lib/batch/process";
 import { money, round2 } from "@/lib/format";
 import { Alert, PageHeader, Pager, Stat } from "@/components/ui";
 import { ActionButton } from "@/components/forms";
+import { SummaryTable } from "@/components/modal";
 import { emitMovementAction } from "../actions";
 import { ImportMovementsForm } from "./import-form";
+import { BulkEmit } from "./bulk-emit";
 
 export const metadata = { title: "Movimientos" };
 const PAGE = 100;
@@ -37,6 +39,7 @@ export default async function MovimientosPage({
   const db = await getDb();
   const [defaults, model, catalogs] = await Promise.all([getSiigoDefaults(), activeModel(), getCatalogs()]);
   const ivaPct = catalogs?.taxes.find((t) => t.id === model?.cfg.ivaTaxId)?.percentage ?? 19;
+  const retTax = catalogs?.taxes.find((t) => t.id === model?.cfg.retentionTaxId);
   const canEmit = user.role !== "USUARIO";
 
   const where: SQL[] = [];
@@ -81,6 +84,8 @@ export default async function MovimientosPage({
         </div>
       )}
 
+      {canEmit && model && <BulkEmit q={q} empresa={empresa} />}
+
       <form className="mb-4 flex flex-wrap gap-2">
         <input name="q" defaultValue={q} className="input max-w-xs" placeholder="Buscar cliente o identificación…" />
         <select name="empresa" defaultValue={empresa} className="input max-w-[200px]">
@@ -109,12 +114,12 @@ export default async function MovimientosPage({
               const amount = Number(m.amount);
               const commission = model ? commissionFor(amount, model.cfg.defaultPct, model.cfg.roundToPeso) : 0;
               const iva = model && !model.cfg.ivaIncluded ? round2((commission * ivaPct) / 100) : 0;
-              const otherCompany = m.company.trim().toLowerCase() !== defaults.issuerCompany.trim().toLowerCase();
+              const otherCompany = !companyAllowed(m.company, defaults.issuerCompanies);
               return (
                 <tr key={m.id}>
                   <td className="text-slate-400">{m.rowNumber ?? ""}</td>
                   <td>{m.company}</td>
-                  <td>{m.customerName}</td>
+                  <td><Link href={`/app/movimientos/${m.id}`} className="text-brand-700 hover:underline">{m.customerName}</Link></td>
                   <td className="font-mono text-xs">
                     {m.identificationRaw}
                     {m.checkDigit && <div className="text-slate-400">NIT {m.identification}-{m.checkDigit}</div>}
@@ -127,7 +132,7 @@ export default async function MovimientosPage({
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusStyle[m.status] ?? ""}`}>{m.status}</span>
                     {m.error && <div className="mt-1 max-w-xs text-xs text-red-600">{m.error}</div>}
                     {m.invoiceId && m.status === "facturado" && (
-                      <div><Link className="text-xs text-brand-700 hover:underline" href={`/app/facturas/${m.invoiceId}`}>Ver factura</Link></div>
+                      <div><Link className="text-xs text-brand-700 hover:underline" href={`/app/movimientos/${m.id}`}>Ver factura</Link></div>
                     )}
                   </td>
                   <td className="text-right">
@@ -137,8 +142,10 @@ export default async function MovimientosPage({
                       ) : (
                         <ActionButton
                           className="btn-primary py-1 whitespace-nowrap"
-                          action={emitMovementAction.bind(null, m.id)}
-                          confirm={`Emitir factura a ${m.customerName}:\n• Ingresos de terceros: ${money(amount)}\n• Comisión ${model.cfg.defaultPct}%: ${money(commission)}${iva ? `\n• IVA ${ivaPct}%: ${money(iva)}` : ""}${m.personType === "Company" && model.cfg.retentionTaxId ? "\n• Retefuente sobre la comisión (persona jurídica)" : ""}\n\n¿Continuar?`}
+                          action={emitMovementAction.bind(null, m.id, {})}
+                          confirmTitle="Emitir factura en Siigo"
+                          confirmLabel="Emitir factura"
+                          confirm={<EmitSummary m={m} amount={amount} commission={commission} iva={iva} ivaPct={ivaPct} pct={model.cfg.defaultPct} retention={m.personType === "Company" && retTax ? { name: retTax.name, pct: Number(retTax.percentage) } : null} />}
                         >
                           {m.status === "error" ? "Reintentar" : "Emitir factura"}
                         </ActionButton>
@@ -154,5 +161,43 @@ export default async function MovimientosPage({
       </div>
       <Pager page={page} hasMore={rows.length > PAGE} href={(n) => href(n)} />
     </>
+  );
+}
+
+function EmitSummary({
+  m,
+  amount,
+  commission,
+  iva,
+  ivaPct,
+  pct,
+  retention,
+}: {
+  m: { customerName: string; identificationRaw: string; company: string; personType: string };
+  amount: number;
+  commission: number;
+  iva: number;
+  ivaPct: number;
+  pct: number;
+  retention: { name: string; pct: number } | null;
+}) {
+  const ret = retention ? round2((commission * retention.pct) / 100) : 0;
+  const rows: [string, string][] = [
+    ["Ingresos de terceros (02)", money(amount)],
+    [`Comisión ${pct}% (01)`, money(commission)],
+    ...(iva ? ([[`IVA ${ivaPct}% de la comisión`, money(iva)]] as [string, string][]) : []),
+    ...(retention ? ([[`${retention.name}`, `− ${money(ret)}`]] as [string, string][]) : []),
+  ];
+  return (
+    <div className="space-y-3">
+      <div>
+        <div className="font-medium text-slate-900">{m.customerName}</div>
+        <div className="text-xs text-slate-500">
+          {m.identificationRaw} · {m.personType === "Company" ? "Persona jurídica" : "Persona natural"} · {m.company}
+        </div>
+      </div>
+      <SummaryTable rows={rows} total={["Total a pagar", money(round2(amount + commission + iva - ret))]} />
+      <p className="text-xs text-slate-500">La factura se crea en Siigo y se envía a la DIAN. Esta acción no se puede deshacer desde Jero.</p>
+    </div>
   );
 }
