@@ -24,7 +24,9 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
     <>
       <PageHeader
         title={batch.name}
-        description={`Lote #${batch.id} · ${batch.fileName ?? ""} · creado ${dateTime(batch.createdAt)}`}
+        description={`Lote #${batch.id} · ${batch.fileName ?? ""} · creado ${dateTime(batch.createdAt)}${
+          batch.params ? ` · ${String(batch.params.modelo)} · comisión ${String(batch.params.comision_pct)}%` : ""
+        }`}
         actions={
           canEdit && (
             <>
@@ -77,7 +79,7 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
       <div className="card overflow-x-auto p-0">
         <table className="table">
           <thead>
-            <tr><th>Ref.</th><th>Fecha</th><th>Cliente</th><th>Ítems</th><th className="text-right">Subtotal</th><th className="text-right">IVA</th><th className="text-right">Total</th><th>Estado</th><th>Factura Siigo</th></tr>
+            <tr><th>Ref.</th><th>Fecha</th><th>Cliente</th><th>Ítems</th><th className="text-right">Subtotal</th><th className="text-right">IVA</th><th className="text-right">Retención</th><th className="text-right">Total</th><th>Estado</th><th>Factura Siigo</th></tr>
           </thead>
           <tbody>
             {invoices.map((inv) => (
@@ -88,6 +90,7 @@ export default async function BatchPage({ params }: { params: Promise<{ id: stri
                 <td>{inv.payload.items.length}</td>
                 <td className="text-right tabular-nums">{money(inv.subtotal)}</td>
                 <td className="text-right tabular-nums">{money(inv.taxTotal)}</td>
+                <td className="text-right tabular-nums">{Number(inv.retentionTotal) ? `- ${money(inv.retentionTotal)}` : "—"}</td>
                 <td className="text-right tabular-nums font-medium">{money(inv.total)}</td>
                 <td>
                   <StatusBadge status={inv.status} />

@@ -8,6 +8,13 @@
       "when": 1793296732214,
       "tag": "0000_init",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1793388629490,
+      "tag": "0001_modelos_negocio",
+      "breakpoints": true
     }
   ]
 }

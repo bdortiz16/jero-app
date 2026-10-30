@@ -126,7 +126,7 @@ export function normalizeNit(v: unknown) {
 
 function parseIds(v: unknown): number[] | null {
   const s = str(v);
-  if (!s) return [];
+  if (!s || /^(ninguno|sin|0)$/i.test(s)) return [];
   const ids = s.split(/[|;,\s]+/).filter(Boolean).map(Number);
   return ids.every((n) => Number.isInteger(n) && n > 0) ? ids : null;
 }
@@ -174,13 +174,14 @@ export function buildInvoices(rows: RawRow[], ctx: BuildContext): { invoices: Bu
   const groups = new Map<string, Group>();
 
   rows.forEach((r, i) => {
-    const rowNum = i + 2; // +1 encabezado, +1 base 1
+    // +1 encabezado, +1 base 1; los modelos de negocio indican la fila original en __fila
+    const rowNum = typeof r.__fila === "number" ? r.__fila : i + 2;
     const ref = str(r.referencia);
     const fail = (message: string) => {
       errors.push({ row: rowNum, reference: ref || undefined, message });
       if (ref && groups.has(ref)) groups.get(ref)!.bad = true;
     };
-    if (Object.values(r).every((v) => str(v) === "")) return; // fila vacía
+    if (Object.entries(r).every(([k, v]) => k === "__fila" || str(v) === "")) return; // fila vacía
     if (!ref) return fail("Falta la referencia");
 
     let g = groups.get(ref);
@@ -205,7 +206,8 @@ export function buildInvoices(rows: RawRow[], ctx: BuildContext): { invoices: Bu
     if (price === null || price < 0) return fail("Precio inválido");
     if (discount < 0 || discount > quantity * price) return fail("Descuento inválido");
     if (taxes === null) return fail("Impuestos inválidos (use IDs numéricos separados por |)");
-    if (taxes.length === 0) taxes = ctx.productTaxes.get(code) ?? [];
+    // "ninguno" = sin impuestos explícitamente (no se toman los del producto)
+    if (taxes.length === 0 && !/^(ninguno|sin|0)$/i.test(str(r.impuestos))) taxes = ctx.productTaxes.get(code) ?? [];
     const unknownTax = taxes.find((t) => taxIds.size && !taxIds.has(t));
     if (unknownTax) return fail(`El impuesto ${unknownTax} no existe en Siigo (actualice catálogos)`);
 

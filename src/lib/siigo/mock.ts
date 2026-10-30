@@ -6,12 +6,14 @@ const g = globalThis as unknown as { __siigoMock?: { seq: number; invoices: Map<
 const state = (g.__siigoMock ??= { seq: 1000, invoices: new Map(), keys: new Map() });
 
 const customers: SiigoCustomer[] = [
-  { id: "c-1", person_type: "Company", identification: "900123456", branch_office: 0, name: ["Comercializadora Andina SAS"], active: true, contacts: [{ email: "facturas@andina.co" }], address: { city: { city_name: "Bogotá" } } },
-  { id: "c-2", person_type: "Person", identification: "1020304050", branch_office: 0, name: ["Laura", "Gómez"], active: true, contacts: [{ email: "laura@example.com" }], address: { city: { city_name: "Medellín" } } },
-  { id: "c-3", person_type: "Company", identification: "800987654", branch_office: 0, name: ["Distribuciones del Pacífico SAS"], active: true, address: { city: { city_name: "Cali" } } },
+  { id: "c-1", person_type: "Company", id_type: { code: "31", name: "NIT" }, identification: "900123456", branch_office: 0, name: ["Comercializadora Andina SAS"], active: true, contacts: [{ email: "facturas@andina.co" }], address: { city: { city_name: "Bogotá" } } },
+  { id: "c-2", person_type: "Person", id_type: { code: "13", name: "Cédula" }, identification: "1020304050", branch_office: 0, name: ["Laura", "Gómez"], active: true, contacts: [{ email: "laura@example.com" }], address: { city: { city_name: "Medellín" } } },
+  { id: "c-3", person_type: "Company", id_type: { code: "31", name: "NIT" }, identification: "800987654", branch_office: 0, name: ["Distribuciones del Pacífico SAS"], active: true, address: { city: { city_name: "Cali" } } },
 ];
 
 const products: SiigoProduct[] = [
+  { id: "p-01", code: "01", name: "Comisión por Operaciones", active: true, taxes: [{ id: 1, name: "IVA 19%", percentage: 19 }] },
+  { id: "p-02", code: "02", name: "Ingresos de Terceros", active: true, taxes: [] },
   { id: "p-1", code: "SERV-01", name: "Asesoría contable mensual", active: true, taxes: [{ id: 1, name: "IVA 19%", percentage: 19 }], prices: [{ currency_code: "COP", price_list: [{ position: 1, name: "General", value: 850000 }] }] },
   { id: "p-2", code: "SERV-02", name: "Declaración de renta", active: true, taxes: [{ id: 1, name: "IVA 19%", percentage: 19 }], prices: [{ currency_code: "COP", price_list: [{ position: 1, name: "General", value: 450000 }] }] },
   { id: "p-3", code: "PROD-01", name: "Libro contable físico", active: true, taxes: [{ id: 2, name: "IVA 5%", percentage: 5 }], prices: [{ currency_code: "COP", price_list: [{ position: 1, name: "General", value: 35000 }] }] },
@@ -32,13 +34,14 @@ export class SiigoMock implements SiigoApi {
       { id: 2, name: "IVA 5%", type: "IVA", percentage: 5, active: true },
       { id: 3, name: "Retefuente servicios 4%", type: "Retefuente", percentage: 4, active: true },
       { id: 4, name: "ReteICA 0.966%", type: "ReteICA", percentage: 0.966, active: true },
+      { id: 5, name: "Retefuente comisiones 11%", type: "Retefuente", percentage: 11, active: true },
     ];
   }
   async paymentTypes() {
     return [
       { id: 5636, name: "Crédito", type: "Cartera", active: true, due_date: true },
       { id: 5637, name: "Efectivo", type: "Efectivo", active: true },
-      { id: 5638, name: "Transferencia", type: "Efectivo", active: true },
+      { id: 5638, name: "Transferencia débito", type: "Efectivo", active: true },
     ];
   }
   async users() {

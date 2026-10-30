@@ -7,7 +7,8 @@ import { getDb, schema } from "@/db";
 import { requireAdmin, requireEditor } from "@/lib/session";
 import { audit } from "@/lib/audit";
 import { parseFile } from "@/lib/batch/parse";
-import { buildInvoices } from "@/lib/batch/build";
+import { buildInvoices, parseNumber, type RowError } from "@/lib/batch/build";
+import { DEFAULT_COMMISSION_CONFIG, expandCommissionRows, type CommissionModelConfig } from "@/lib/batch/commission";
 import { getCatalogs, getSiigo, refreshCatalogs } from "@/lib/siigo";
 import { getSiigoDefaults, saveSiigoCredentials, setSetting, type SiigoDefaults } from "@/lib/settings";
 import { todayBogota } from "@/lib/format";
@@ -26,15 +27,38 @@ export async function uploadBatch(_: ActionState, fd: FormData): Promise<ActionS
 
   let batchId: number;
   try {
-    const rows = await parseFile(file.name, await file.arrayBuffer());
+    let rows = await parseFile(file.name, await file.arrayBuffer());
     const db = await getDb();
     const [defaults, catalogs, products, customers] = await Promise.all([
       getSiigoDefaults(),
       getCatalogs(),
       db.select({ code: schema.products.code, taxIds: schema.products.taxIds }).from(schema.products),
-      db.select({ id: schema.customers.identification, name: schema.customers.name }).from(schema.customers),
+      db
+        .select({ id: schema.customers.identification, name: schema.customers.name, personType: schema.customers.personType, idType: schema.customers.idType })
+        .from(schema.customers),
     ]);
-    const { invoices, errors } = buildInvoices(rows, {
+
+    // Modelo de negocio: convierte el archivo propio (ej. dispersiones) en ítems estándar.
+    const modelId = Number(fd.get("modelId")) || null;
+    let params: Record<string, unknown> | null = null;
+    const modelErrors: RowError[] = [];
+    if (modelId) {
+      const model = await db.query.businessModels.findFirst({ where: eq(schema.businessModels.id, modelId) });
+      if (!model || !model.active) return { error: "El modelo de negocio no existe o está inactivo" };
+      const cfg = { ...DEFAULT_COMMISSION_CONFIG, ...(model.config as Partial<CommissionModelConfig>) };
+      const iva = catalogs?.taxes.find((t) => t.id === cfg.ivaTaxId);
+      if (!iva) return { error: `El modelo "${model.name}" no tiene un IVA válido. Revísalo en Modelos de negocio.` };
+      const pctRaw = String(fd.get("pct") ?? "").trim();
+      const pct = pctRaw ? parseNumber(pctRaw.replace("%", "")) : cfg.defaultPct;
+      if (pct === null || pct < 0 || pct > 100) return { error: "% de comisión inválido" };
+      const companies = new Set(customers.filter((c) => c.personType === "Company" && c.idType === "31").map((c) => c.id));
+      const exp = expandCommissionRows(rows, cfg, { pct, ivaPct: iva.percentage, today: todayBogota(), isColombianCompany: (n) => companies.has(n) });
+      rows = exp.rows;
+      modelErrors.push(...exp.errors);
+      params = { modelo: model.name, comision_pct: pct, iva_incluido: cfg.ivaIncluded };
+    }
+
+    const { invoices, errors: buildErrors } = buildInvoices(rows, {
       defaults,
       taxes: catalogs?.taxes ?? [],
       paymentTypes: catalogs?.paymentTypes ?? [],
@@ -42,6 +66,7 @@ export async function uploadBatch(_: ActionState, fd: FormData): Promise<ActionS
       customers: new Map(customers.map((c) => [c.id, c.name])),
       today: todayBogota(),
     });
+    const errors = [...modelErrors, ...buildErrors].sort((a, b) => a.row - b.row);
     // Evita facturar dos veces: una referencia ya emitida o en curso en otro lote se rechaza.
     const refs = invoices.map((i) => i.reference);
     const dupes = refs.length
@@ -71,7 +96,7 @@ export async function uploadBatch(_: ActionState, fd: FormData): Promise<ActionS
     batchId = await db.transaction(async (tx) => {
       const [batch] = await tx
         .insert(schema.invoiceBatches)
-        .values({ name, fileName: file.name, totalCount: invoices.length, totalAmount, rowErrors: errors, createdBy: user.id })
+        .values({ name, fileName: file.name, totalCount: invoices.length, totalAmount, rowErrors: errors, modelId, params, createdBy: user.id })
         .returning({ id: schema.invoiceBatches.id });
       for (let i = 0; i < invoices.length; i += 200) {
         await tx.insert(schema.invoices).values(
@@ -165,6 +190,8 @@ export async function syncCustomers(): Promise<ActionState> {
           email: c.contacts?.find((x) => x.email)?.email ?? null,
           phone: c.phones?.[0]?.number ?? null,
           city: c.address?.city?.city_name ?? null,
+          personType: c.person_type ?? null,
+          idType: c.id_type?.code ?? null,
           active: c.active,
           syncedAt: new Date(),
         };
@@ -287,4 +314,49 @@ export async function updateUser(userId: string, patch: { role?: string; status?
   await db.update(schema.users).set(set).where(eq(schema.users.id, userId));
   await audit(admin, "user.update", { userId, ...set });
   revalidatePath("/app/admin/usuarios");
+}
+
+// ---------- Modelos de negocio ----------
+
+export async function saveCommissionModel(_: ActionState, fd: FormData): Promise<ActionState> {
+  const user = await requireAdmin();
+  const id = Number(fd.get("id")) || null;
+  const name = String(fd.get("name") ?? "").trim();
+  const text = (k: string) => String(fd.get(k) ?? "").trim();
+  const num = (k: string) => (text(k) ? parseNumber(text(k)) : null);
+  const config: CommissionModelConfig = {
+    thirdPartyCode: text("thirdPartyCode"),
+    thirdPartyDescription: text("thirdPartyDescription") || DEFAULT_COMMISSION_CONFIG.thirdPartyDescription,
+    commissionCode: text("commissionCode"),
+    commissionDescription: text("commissionDescription") || DEFAULT_COMMISSION_CONFIG.commissionDescription,
+    ivaTaxId: num("ivaTaxId") ?? 0,
+    ivaIncluded: fd.get("ivaIncluded") === "on",
+    retentionTaxId: num("retentionTaxId"),
+    defaultPct: num("defaultPct") ?? DEFAULT_COMMISSION_CONFIG.defaultPct,
+    paymentId: num("paymentId"),
+    roundToPeso: fd.get("roundToPeso") === "on",
+  };
+  if (!name) return { error: "Escribe un nombre para el modelo" };
+  if (!config.thirdPartyCode || !config.commissionCode) return { error: "Indica los códigos de producto de terceros y de comisión" };
+  if (!config.ivaTaxId) return { error: "Selecciona el IVA de la comisión" };
+  if (config.defaultPct < 0 || config.defaultPct > 100) return { error: "% de comisión inválido" };
+  const db = await getDb();
+  if (id) {
+    await db.update(schema.businessModels).set({ name, config }).where(eq(schema.businessModels.id, id));
+  } else {
+    await db.insert(schema.businessModels).values({ name, type: "commission", config });
+  }
+  await audit(user, id ? "model.update" : "model.create", { id, name, config });
+  revalidatePath("/app/modelos");
+  revalidatePath("/app/masiva");
+  if (!id) redirect("/app/modelos");
+  return { ok: "Modelo guardado" };
+}
+
+export async function toggleModel(id: number, active: boolean) {
+  const user = await requireAdmin();
+  const db = await getDb();
+  await db.update(schema.businessModels).set({ active }).where(eq(schema.businessModels.id, id));
+  await audit(user, "model.toggle", { id, active });
+  revalidatePath("/app/modelos");
 }

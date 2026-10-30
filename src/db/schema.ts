@@ -42,6 +42,9 @@ export const customers = pgTable(
     email: text("email"),
     phone: text("phone"),
     city: text("city"),
+    // Person | Company y código de tipo de documento de Siigo (31 = NIT): definen si aplica retención
+    personType: text("person_type"),
+    idType: text("id_type"),
     active: boolean("active").notNull().default(true),
     syncedAt: timestamp("synced_at", { withTimezone: true }),
   },
@@ -59,6 +62,17 @@ export const products = pgTable("products", {
   syncedAt: timestamp("synced_at", { withTimezone: true }),
 });
 
+/** Modelos de negocio: plantillas que convierten un archivo propio en facturas (ej. pagos a terceros + comisión). */
+export const businessModels = pgTable("business_models", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  // commission = pagos a terceros + comisión
+  type: text("type").notNull(),
+  config: jsonb("config").$type<Record<string, unknown>>().notNull(),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const invoiceBatches = pgTable("invoice_batches", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -71,6 +85,9 @@ export const invoiceBatches = pgTable("invoice_batches", {
   totalAmount: numeric("total_amount", { precision: 18, scale: 2 }).notNull().default("0"),
   // Filas rechazadas en la validación del archivo
   rowErrors: jsonb("row_errors").$type<{ row: number; reference?: string; message: string }[]>().notNull().default([]),
+  // Modelo de negocio usado (null = archivo estándar por ítems) y parámetros del lote (ej. % de comisión)
+  modelId: integer("model_id").references(() => businessModels.id),
+  params: jsonb("params").$type<Record<string, unknown>>(),
   createdBy: text("created_by").references(() => users.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   finishedAt: timestamp("finished_at", { withTimezone: true }),
@@ -144,3 +161,4 @@ export const auditLog = pgTable("audit_log", {
 export type User = typeof users.$inferSelect;
 export type Invoice = typeof invoices.$inferSelect;
 export type InvoiceBatch = typeof invoiceBatches.$inferSelect;
+export type BusinessModel = typeof businessModels.$inferSelect;

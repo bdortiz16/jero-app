@@ -73,6 +73,14 @@ export default async function SiigoPage() {
         </div>
       </div>
 
+      <div className="card mt-6 flex flex-wrap items-center justify-between gap-4">
+        <div>
+          <h2 className="font-semibold">3. Modelos de negocio</h2>
+          <p className="text-sm text-slate-500">Configura cómo se arman las facturas de cada negocio (ej. pagos a terceros + comisión con IVA y retención).</p>
+        </div>
+        <a href="/app/modelos" className="btn-primary">Configurar modelos</a>
+      </div>
+
       {catalogs && (
         <div className="card mt-6 overflow-x-auto p-0">
           <h2 className="px-5 py-4 font-semibold">Impuestos disponibles (usa el ID en la columna <code>impuestos</code>)</h2>
