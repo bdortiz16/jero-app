@@ -5,7 +5,7 @@ import { getCatalogs } from "@/lib/siigo";
 import { DEFAULT_COMMISSION_CONFIG, type CommissionModelConfig } from "@/lib/batch/commission";
 import { Alert, PageHeader, StatusBadge } from "@/components/ui";
 import { ActionButton, ActionForm, Submit } from "@/components/forms";
-import { saveCommissionModel, syncAllFromSiigo, toggleModel } from "../actions";
+import { deleteModel, saveCommissionModel, syncAllFromSiigo, toggleModel } from "../actions";
 
 export const metadata = { title: "Modelos de negocio" };
 
@@ -42,7 +42,10 @@ export default async function ModelosPage({ searchParams }: { searchParams: Prom
 
   return (
     <>
-      <PageHeader title="Modelos de negocio" description="Plantillas que convierten tus archivos en facturas con la estructura de cada negocio." />
+      <PageHeader title="Modelos de negocio" description="Plantillas que convierten tus archivos en facturas. Solo un modelo puede estar activo: es el que se usa al emitir (individual o masivo)." />
+      {models.length > 0 && !models.some((m) => m.active) && (
+        <div className="mb-4"><Alert kind="warning">No hay ningún modelo activo: activa uno para poder emitir facturas de movimientos.</Alert></div>
+      )}
 
       <div className="card mb-6 overflow-x-auto p-0">
         <table className="table">
@@ -56,14 +59,31 @@ export default async function ModelosPage({ searchParams }: { searchParams: Prom
                   <td className="text-xs">{c.thirdPartyCode} · {c.thirdPartyDescription}<br />{c.commissionCode} · {c.commissionDescription}</td>
                   <td>{c.defaultPct}% {c.ivaIncluded ? "(IVA incluido)" : "+ IVA"}</td>
                   <td className="text-xs">{taxName(c.ivaTaxId)}{c.retentionTaxId ? <><br />{taxName(c.retentionTaxId)} (solo persona jurídica)</> : null}</td>
-                  <td><StatusBadge status={m.active ? "active" : "disabled"} /></td>
+                  <td>
+                    {m.active ? (
+                      <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Activo · se usa al emitir</span>
+                    ) : (
+                      <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">Inactivo</span>
+                    )}
+                  </td>
                   <td className="text-right whitespace-nowrap">
                     {isAdmin && (
                       <>
                         <a className="btn-secondary mr-2 py-1" href={`/app/modelos?editar=${m.id}`}>Editar</a>
-                        <ActionButton className="btn-secondary py-1" action={toggleModel.bind(null, m.id, !m.active)}>
-                          {m.active ? "Desactivar" : "Activar"}
-                        </ActionButton>
+                        {m.active ? (
+                          <ActionButton className="btn-secondary py-1" action={toggleModel.bind(null, m.id, false)} confirmTitle="Desactivar modelo" confirmLabel="Desactivar" confirm="Sin un modelo activo no se podrán emitir facturas de movimientos.">
+                            Desactivar
+                          </ActionButton>
+                        ) : (
+                          <>
+                            <ActionButton className="btn-primary py-1" action={toggleModel.bind(null, m.id, true)} confirmTitle="Activar modelo" confirmLabel="Activar" confirm={`"${m.name}" pasará a ser el modelo con el que se emiten las facturas. Los demás modelos quedarán inactivos.`}>
+                              Activar
+                            </ActionButton>{" "}
+                            <ActionButton className="btn-secondary py-1 text-red-700" action={deleteModel.bind(null, m.id)} confirmTitle="Eliminar modelo" confirmLabel="Eliminar" confirm={`¿Eliminar el modelo "${m.name}"? Esta acción no se puede deshacer.`}>
+                              Eliminar
+                            </ActionButton>
+                          </>
+                        )}
                       </>
                     )}
                   </td>

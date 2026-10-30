@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, asc, eq, ilike, inArray, or, sql } from "drizzle-orm";
+import { and, asc, eq, ilike, inArray, ne, or, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireAdmin, requireEditor } from "@/lib/session";
 import { audit } from "@/lib/audit";
@@ -395,7 +395,9 @@ export async function saveCommissionModel(_: ActionState, fd: FormData): Promise
   if (id) {
     await db.update(schema.businessModels).set({ name, config }).where(eq(schema.businessModels.id, id));
   } else {
-    await db.insert(schema.businessModels).values({ name, type: "commission", config });
+    // Si ya hay un modelo activo, el nuevo queda inactivo (solo uno puede estar activo).
+    const activeExists = await db.query.businessModels.findFirst({ where: eq(schema.businessModels.active, true) });
+    await db.insert(schema.businessModels).values({ name, type: "commission", config, active: !activeExists });
   }
   await audit(user, id ? "model.update" : "model.create", { id, name, config });
   revalidatePath("/app/modelos");
@@ -404,12 +406,30 @@ export async function saveCommissionModel(_: ActionState, fd: FormData): Promise
   return { ok: "Modelo guardado" };
 }
 
-export async function toggleModel(id: number, active: boolean) {
+/** Solo puede haber un modelo activo (el que se usa al emitir): activar uno desactiva los demás. */
+export async function toggleModel(id: number, active: boolean): Promise<ActionState> {
   const user = await requireAdmin();
   const db = await getDb();
-  await db.update(schema.businessModels).set({ active }).where(eq(schema.businessModels.id, id));
+  await db.transaction(async (tx) => {
+    if (active) await tx.update(schema.businessModels).set({ active: false }).where(ne(schema.businessModels.id, id));
+    await tx.update(schema.businessModels).set({ active }).where(eq(schema.businessModels.id, id));
+  });
   await audit(user, "model.toggle", { id, active });
   revalidatePath("/app/modelos");
+  revalidatePath("/app/movimientos");
+  return { ok: active ? "Modelo activado: se usará al emitir" : "Modelo desactivado" };
+}
+
+/** Elimina un modelo que no se haya usado en ningún lote. */
+export async function deleteModel(id: number): Promise<ActionState> {
+  const user = await requireAdmin();
+  const db = await getDb();
+  const used = await db.query.invoiceBatches.findFirst({ where: eq(schema.invoiceBatches.modelId, id) });
+  if (used) return { error: "No se puede eliminar: ya se usó en lotes de facturación. Desactívalo." };
+  await db.delete(schema.businessModels).where(eq(schema.businessModels.id, id));
+  await audit(user, "model.delete", { id });
+  revalidatePath("/app/modelos");
+  return { ok: "Modelo eliminado" };
 }
 
 // ---------- Movimientos ----------
