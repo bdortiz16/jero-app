@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import {
   SiigoError,
   type SiigoCostCenter,
@@ -151,13 +152,17 @@ export class SiigoClient implements SiigoApi {
   createCustomer(body: SiigoCustomerRequest) {
     return this.request<SiigoCustomer>("POST", "/v1/customers", body);
   }
-  createInvoice(body: SiigoInvoiceRequest, idempotencyKey?: string) {
-    return this.request<SiigoInvoiceResponse>(
-      "POST",
-      "/v1/invoices",
-      body,
-      idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
-    );
+  async createInvoice(body: SiigoInvoiceRequest, idempotencyKey?: string) {
+    const key = idempotencyKey ? siigoIdempotencyKey(idempotencyKey) : undefined;
+    try {
+      return await this.request<SiigoInvoiceResponse>("POST", "/v1/invoices", body, key ? { "Idempotency-Key": key } : undefined);
+    } catch (e) {
+      // Si Siigo no acepta la llave, la factura no se creó: se reintenta una vez sin ella.
+      if (key && e instanceof SiigoError && /idempotency/i.test(e.message)) {
+        return this.request<SiigoInvoiceResponse>("POST", "/v1/invoices", body);
+      }
+      throw e;
+    }
   }
   getInvoice(id: string) {
     return this.request<SiigoInvoiceResponse>("GET", `/v1/invoices/${encodeURIComponent(id)}`);
@@ -185,4 +190,12 @@ async function safeJson(res: Response): Promise<SiigoErrorBody | undefined> {
 export function describe(body?: SiigoErrorBody): string {
   if (!body?.Errors?.length) return "";
   return body.Errors.map((e) => `${e.Code}: ${e.Message}${e.Params?.length ? ` (${e.Params.join(", ")})` : ""}`).join(" | ");
+}
+
+/**
+ * Siigo solo acepta llaves de idempotencia alfanuméricas: se deriva una de 32 caracteres (hex) estable
+ * a partir del identificador interno, para que el mismo envío repetido no cree dos facturas.
+ */
+export function siigoIdempotencyKey(source: string): string {
+  return createHash("sha256").update(source).digest("hex").slice(0, 32);
 }
