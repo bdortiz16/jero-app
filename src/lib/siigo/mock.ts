@@ -61,6 +61,24 @@ export class SiigoMock implements SiigoApi {
   async findCustomer(identification: string) {
     return customers.find((c) => c.identification === identification) ?? null;
   }
+  async createCustomer(body: Parameters<SiigoApi["createCustomer"]>[0]) {
+    await delay();
+    if (customers.some((c) => c.identification === body.identification)) {
+      throw new SiigoError("already_exists: el cliente ya existe", 400, { Errors: [{ Code: "already_exists", Message: "The customer already exists" }] });
+    }
+    const c: SiigoCustomer = {
+      id: crypto.randomUUID(),
+      person_type: body.person_type,
+      id_type: { code: body.id_type, name: body.id_type === "31" ? "NIT" : "Cédula" },
+      identification: body.identification,
+      branch_office: 0,
+      check_digit: body.check_digit,
+      name: body.name,
+      active: true,
+    };
+    customers.push(c);
+    return c;
+  }
   async createInvoice(body: Parameters<SiigoApi["createInvoice"]>[0], key?: string) {
     await delay();
     if (key && state.keys.has(key)) return state.invoices.get(state.keys.get(key)!)!;

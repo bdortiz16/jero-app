@@ -15,6 +15,13 @@
       "when": 1793388629490,
       "tag": "0001_modelos_negocio",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1793389358700,
+      "tag": "0002_movimientos",
+      "breakpoints": true
     }
   ]
 }

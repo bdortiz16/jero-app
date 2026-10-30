@@ -1,6 +1,7 @@
 import {
   SiigoError,
   type SiigoCostCenter,
+  type SiigoCustomerRequest,
   type SiigoCustomer,
   type SiigoDocumentType,
   type SiigoErrorBody,
@@ -38,6 +39,7 @@ export interface SiigoApi {
   customers(page: number, pageSize?: number): Promise<SiigoPaged<SiigoCustomer>>;
   products(page: number, pageSize?: number): Promise<SiigoPaged<SiigoProduct>>;
   findCustomer(identification: string): Promise<SiigoCustomer | null>;
+  createCustomer(body: SiigoCustomerRequest): Promise<SiigoCustomer>;
   createInvoice(body: SiigoInvoiceRequest, idempotencyKey?: string): Promise<SiigoInvoiceResponse>;
   getInvoice(id: string): Promise<SiigoInvoiceResponse>;
   invoicePdfUrl?(id: string): Promise<string | null>;
@@ -141,6 +143,9 @@ export class SiigoClient implements SiigoApi {
       `/v1/customers?identification=${encodeURIComponent(identification)}`,
     );
     return r.results[0] ?? null;
+  }
+  createCustomer(body: SiigoCustomerRequest) {
+    return this.request<SiigoCustomer>("POST", "/v1/customers", body);
   }
   createInvoice(body: SiigoInvoiceRequest, idempotencyKey?: string) {
     return this.request<SiigoInvoiceResponse>(

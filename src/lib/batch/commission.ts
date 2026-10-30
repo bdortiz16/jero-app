@@ -86,8 +86,8 @@ export function expandCommissionRows(
   const s = (v: unknown) => (v === null || v === undefined ? "" : String(v).trim());
 
   rows.forEach((r, i) => {
-    const fila = i + 2;
-    if (Object.values(r).every((v) => s(v) === "")) return;
+    const fila = typeof r.__fila === "number" ? r.__fila : i + 2;
+    if (Object.entries(r).every(([k, v]) => k === "__fila" || s(v) === "")) return;
     const nit = normalizeNit(r.cliente_nit);
     const payment = parseNumber(s(r.valor_dispersado) ? r.valor_dispersado : r.valor_pago);
     const pctRow = s(r.comision_pct) ? parseNumber(String(r.comision_pct).replace("%", "")) : opts.pct;

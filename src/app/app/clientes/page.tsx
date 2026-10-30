@@ -35,7 +35,7 @@ export default async function ClientesPage({ searchParams }: { searchParams: Pro
       </form>
       <div className="card overflow-x-auto p-0">
         <table className="table">
-          <thead><tr><th>Identificación</th><th>Nombre</th><th>Correo</th><th>Ciudad</th><th>Sucursal</th><th>Sincronizado</th></tr></thead>
+          <thead><tr><th>Identificación</th><th>Nombre</th><th>Correo</th><th>Ciudad</th><th>Sucursal</th><th>Tipo</th><th>En Siigo</th></tr></thead>
           <tbody>
             {rows.slice(0, PAGE).map((c) => (
               <tr key={c.id} className={c.active ? "" : "opacity-50"}>
@@ -44,10 +44,11 @@ export default async function ClientesPage({ searchParams }: { searchParams: Pro
                 <td>{c.email ?? "—"}</td>
                 <td>{c.city ?? "—"}</td>
                 <td>{c.branchOffice}</td>
-                <td>{dateTime(c.syncedAt)}</td>
+                <td>{c.personType === "Company" ? "Jurídica" : c.personType === "Person" ? "Natural" : "—"}</td>
+                <td>{c.siigoId ? <span className="text-emerald-700">Sí · {dateTime(c.syncedAt)}</span> : <span className="text-amber-700">Se crea al facturar</span>}</td>
               </tr>
             ))}
-            {rows.length === 0 && <tr><td colSpan={6} className="py-8 text-center text-slate-500">Sin clientes. Sincroniza desde Siigo.</td></tr>}
+            {rows.length === 0 && <tr><td colSpan={7} className="py-8 text-center text-slate-500">Sin clientes. Sincroniza desde Siigo.</td></tr>}
           </tbody>
         </table>
       </div>

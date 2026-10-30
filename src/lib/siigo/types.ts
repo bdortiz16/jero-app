@@ -67,6 +67,22 @@ export type SiigoCustomer = {
   contacts?: { first_name?: string; last_name?: string; email?: string }[];
 };
 
+export type SiigoCustomerRequest = {
+  type: "Customer";
+  person_type: "Person" | "Company";
+  id_type: string; // 13 cédula, 31 NIT
+  identification: string;
+  check_digit?: string;
+  name: string[];
+  branch_office: number;
+  active: boolean;
+  vat_responsible: boolean;
+  fiscal_responsibilities: { code: string }[];
+  address: { address: string; city: { country_code: string; state_code: string; city_code: string } };
+  phones?: { number: string }[];
+  contacts?: { first_name: string; last_name: string; email: string }[];
+};
+
 export type SiigoProduct = {
   id: string;
   code: string;

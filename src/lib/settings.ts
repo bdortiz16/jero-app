@@ -32,6 +32,13 @@ export type SiigoDefaults = {
   dueDays: number;
   sendStamp: boolean;
   sendMail: boolean;
+  /** Empresa que factura con esta conexión de Siigo (columna "Empresa que factura" de los movimientos). */
+  issuerCompany: string;
+  /** Datos para crear en Siigo los clientes que no existan (el archivo no trae dirección ni ciudad). */
+  newCustomerAddress: string;
+  newCustomerStateCode: string;
+  newCustomerCityCode: string;
+  newCustomerEmail: string;
 };
 
 export const DEFAULTS: SiigoDefaults = {
@@ -42,6 +49,11 @@ export const DEFAULTS: SiigoDefaults = {
   dueDays: 30,
   sendStamp: true,
   sendMail: true,
+  issuerCompany: "JERO",
+  newCustomerAddress: "Sin dirección",
+  newCustomerStateCode: "11",
+  newCustomerCityCode: "11001",
+  newCustomerEmail: "",
 };
 
 export async function getSiigoCredentials(): Promise<SiigoCredentials | null> {

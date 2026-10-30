@@ -158,7 +158,48 @@ export const auditLog = pgTable("audit_log", {
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
+/** Archivos de movimientos cargados (ej. "Facturas por emitir"). */
+export const movementImports = pgTable("movement_imports", {
+  id: serial("id").primaryKey(),
+  fileName: text("file_name").notNull(),
+  rowCount: integer("row_count").notNull().default(0),
+  newCount: integer("new_count").notNull().default(0),
+  createdBy: text("created_by").references(() => users.id),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+/** Movimientos por facturar: una fila por beneficiario, tal como viene en el archivo. */
+export const movements = pgTable(
+  "movements",
+  {
+    id: serial("id").primaryKey(),
+    importId: integer("import_id").references(() => movementImports.id),
+    rowNumber: integer("row_number"),
+    company: text("company").notNull(),
+    customerName: text("customer_name").notNull(),
+    // Identificación tal cual viene en el archivo, y la normalizada para Siigo (sin DV)
+    identificationRaw: text("identification_raw").notNull(),
+    identification: text("identification").notNull(),
+    checkDigit: text("check_digit"),
+    personType: text("person_type").notNull(),
+    withdrawals: integer("withdrawals"),
+    dateFrom: timestamp("date_from", { withTimezone: true }),
+    dateTo: timestamp("date_to", { withTimezone: true }),
+    amount: numeric("amount", { precision: 18, scale: 2 }).notNull(),
+    // pendiente | emitiendo | facturado | error
+    status: text("status").notNull().default("pendiente"),
+    error: text("error"),
+    invoiceId: integer("invoice_id").references(() => invoices.id),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("movements_unique").on(t.company, t.identificationRaw, t.dateFrom, t.dateTo, t.amount),
+    index("movements_status").on(t.status),
+  ],
+);
+
 export type User = typeof users.$inferSelect;
+export type Movement = typeof movements.$inferSelect;
 export type Invoice = typeof invoices.$inferSelect;
 export type InvoiceBatch = typeof invoiceBatches.$inferSelect;
 export type BusinessModel = typeof businessModels.$inferSelect;

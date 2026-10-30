@@ -67,6 +67,32 @@ export default async function SiigoPage() {
               </div>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="sendStamp" defaultChecked={defaults.sendStamp} /> Enviar a la DIAN automáticamente (factura electrónica)</label>
               <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="sendMail" defaultChecked={defaults.sendMail} /> Enviar la factura por correo al cliente</label>
+              <div className="border-t border-slate-200 pt-4">
+                <h3 className="mb-1 text-sm font-semibold">Movimientos</h3>
+                <p className="mb-3 text-xs text-slate-500">Solo se emiten los movimientos de esta empresa. Los clientes que no existan se crean en Siigo con estos datos.</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div>
+                    <label className="label" htmlFor="issuerCompany">Empresa que factura (como en el archivo)</label>
+                    <input id="issuerCompany" name="issuerCompany" className="input" defaultValue={defaults.issuerCompany} />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="newCustomerAddress">Dirección para clientes nuevos</label>
+                    <input id="newCustomerAddress" name="newCustomerAddress" className="input" defaultValue={defaults.newCustomerAddress} />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="newCustomerStateCode">Código departamento (DANE)</label>
+                    <input id="newCustomerStateCode" name="newCustomerStateCode" className="input" defaultValue={defaults.newCustomerStateCode} />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="newCustomerCityCode">Código ciudad (DANE)</label>
+                    <input id="newCustomerCityCode" name="newCustomerCityCode" className="input" defaultValue={defaults.newCustomerCityCode} />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="label" htmlFor="newCustomerEmail">Correo de contacto para clientes nuevos (opcional)</label>
+                    <input id="newCustomerEmail" name="newCustomerEmail" type="email" className="input" defaultValue={defaults.newCustomerEmail} placeholder="facturacion@tuempresa.com" />
+                  </div>
+                </div>
+              </div>
               <Submit>Guardar valores</Submit>
             </ActionForm>
           )}

@@ -34,7 +34,13 @@ export async function uploadBatch(_: ActionState, fd: FormData): Promise<ActionS
       getCatalogs(),
       db.select({ code: schema.products.code, taxIds: schema.products.taxIds }).from(schema.products),
       db
-        .select({ id: schema.customers.identification, name: schema.customers.name, personType: schema.customers.personType, idType: schema.customers.idType })
+        .select({
+          id: schema.customers.identification,
+          name: schema.customers.name,
+          personType: schema.customers.personType,
+          idType: schema.customers.idType,
+          siigoId: schema.customers.siigoId,
+        })
         .from(schema.customers),
     ]);
 
@@ -63,7 +69,8 @@ export async function uploadBatch(_: ActionState, fd: FormData): Promise<ActionS
       taxes: catalogs?.taxes ?? [],
       paymentTypes: catalogs?.paymentTypes ?? [],
       productTaxes: new Map(products.map((p) => [p.code, p.taxIds])),
-      customers: new Map(customers.map((c) => [c.id, c.name])),
+      // Solo los clientes que existen en Siigo (los cargados desde movimientos aún pueden no estar)
+      customers: new Map(customers.filter((c) => c.siigoId).map((c) => [c.id, c.name])),
       today: todayBogota(),
     });
     const errors = [...modelErrors, ...buildErrors].sort((a, b) => a.row - b.row);
@@ -294,6 +301,11 @@ export async function saveDefaults(_: ActionState, fd: FormData): Promise<Action
     dueDays: Math.max(0, Number(fd.get("dueDays") ?? 30) || 0),
     sendStamp: fd.get("sendStamp") === "on",
     sendMail: fd.get("sendMail") === "on",
+    issuerCompany: String(fd.get("issuerCompany") ?? "").trim() || "JERO",
+    newCustomerAddress: String(fd.get("newCustomerAddress") ?? "").trim() || "Sin dirección",
+    newCustomerStateCode: String(fd.get("newCustomerStateCode") ?? "").trim() || "11",
+    newCustomerCityCode: String(fd.get("newCustomerCityCode") ?? "").trim() || "11001",
+    newCustomerEmail: String(fd.get("newCustomerEmail") ?? "").trim(),
   };
   await setSetting("siigo:defaults", defaults);
   await audit(user, "siigo.defaults_saved", defaults);
@@ -359,4 +371,75 @@ export async function toggleModel(id: number, active: boolean) {
   await db.update(schema.businessModels).set({ active }).where(eq(schema.businessModels.id, id));
   await audit(user, "model.toggle", { id, active });
   revalidatePath("/app/modelos");
+}
+
+// ---------- Movimientos ----------
+
+export async function importMovements(_: ActionState, fd: FormData): Promise<ActionState> {
+  const user = await requireEditor();
+  const file = fd.get("file");
+  if (!(file instanceof File) || file.size === 0) return { error: "Seleccione el archivo .xlsx o .csv" };
+  if (file.size > 15 * 1024 * 1024) return { error: "El archivo supera 15 MB" };
+  try {
+    const { parseMovementRows } = await import("@/lib/movements");
+    const rows = await parseFile(file.name, await file.arrayBuffer(), { headerKey: "identificacion" });
+    const { movements, errors } = parseMovementRows(rows);
+    if (movements.length === 0) {
+      return { error: `No se encontraron movimientos. ${errors.slice(0, 3).map((e) => `Fila ${e.row}: ${e.message}`).join(" · ")}` };
+    }
+    const db = await getDb();
+    const [imp] = await db
+      .insert(schema.movementImports)
+      .values({ fileName: file.name, rowCount: movements.length, createdBy: user.id })
+      .returning();
+    let inserted = 0;
+    for (let i = 0; i < movements.length; i += 500) {
+      const res = await db
+        .insert(schema.movements)
+        .values(movements.slice(i, i + 500).map((m) => ({ ...m, importId: imp.id, amount: m.amount.toFixed(2) })))
+        .onConflictDoNothing()
+        .returning({ id: schema.movements.id });
+      inserted += res.length;
+    }
+    await db.update(schema.movementImports).set({ newCount: inserted }).where(eq(schema.movementImports.id, imp.id));
+    // Los clientes del archivo quedan registrados en Jero; en Siigo se crean al emitir si no existen.
+    const seen = new Set<string>();
+    const customerRows = movements.filter((m) => !seen.has(m.identification) && seen.add(m.identification));
+    for (let i = 0; i < customerRows.length; i += 500) {
+      await db
+        .insert(schema.customers)
+        .values(
+          customerRows.slice(i, i + 500).map((m) => ({
+            identification: m.identification,
+            branchOffice: 0,
+            name: m.customerName,
+            personType: m.personType,
+            idType: m.personType === "Company" ? "31" : "13",
+          })),
+        )
+        .onConflictDoNothing();
+    }
+    await audit(user, "movements.import", { file: file.name, rows: movements.length, inserted, errors: errors.length });
+    revalidatePath("/app/movimientos");
+    const skipped = movements.length - inserted;
+    return {
+      ok: `${inserted} movimientos cargados${skipped ? ` (${skipped} ya existían)` : ""}${errors.length ? ` · ${errors.length} filas con error` : ""}. ${seen.size} clientes.`,
+    };
+  } catch (e) {
+    return { error: errMsg(e) };
+  }
+}
+
+export async function emitMovementAction(movementId: number): Promise<ActionState> {
+  const user = await requireEditor();
+  try {
+    const { emitMovement } = await import("@/lib/movements-emit");
+    const number = await emitMovement(movementId, user.id);
+    await audit(user, "movement.emit", { movementId, invoice: number });
+    revalidatePath("/app/movimientos");
+    return { ok: `Factura ${number} emitida` };
+  } catch (e) {
+    revalidatePath("/app/movimientos");
+    return { error: errMsg(e) };
+  }
 }
