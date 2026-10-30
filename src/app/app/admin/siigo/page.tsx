@@ -16,7 +16,7 @@ export default async function SiigoPage() {
   // Preselección cuando hay una opción clara (el usuario solo confirma con Guardar valores).
   const suggested = {
     documentId: resolveDocumentId(defaults, catalogs),
-    sellerId: defaults.sellerId ?? (catalogs?.sellers.length === 1 ? catalogs.sellers[0].id : null),
+    sellerId: defaults.sellerId ?? catalogs?.sellers[0]?.id ?? null,
     paymentId:
       defaults.paymentId ??
       catalogs?.paymentTypes.find((p) => /transfer/i.test(p.name) && /d[eé]bito/i.test(p.name))?.id ??
@@ -71,7 +71,15 @@ export default async function SiigoPage() {
                 <Alert kind="warning">Elige los valores marcados y pulsa <b>Guardar valores</b>: sin ellos no se pueden emitir facturas.</Alert>
               )}
               <Select name="documentId" label="Tipo de comprobante (factura de venta)" value={suggested.documentId} options={catalogs.documentTypes.map((d) => [d.id, `${d.code} · ${d.name} (${d.id})`])} required />
-              <Select name="sellerId" label="Vendedor predeterminado" value={suggested.sellerId} options={catalogs.sellers.map((s) => [s.id, `${s.name} (${s.id})`])} required />
+              {catalogs.sellers.length ? (
+                <Select name="sellerId" label="Vendedor predeterminado" value={suggested.sellerId} options={catalogs.sellers.map((s) => [s.id, `${s.name} (${s.id})`])} required />
+              ) : (
+                <div>
+                  <label className="label" htmlFor="sellerId">Vendedor predeterminado (ID de usuario en Siigo)</label>
+                  <input id="sellerId" name="sellerId" type="number" min={1} required className="input" defaultValue={defaults.sellerId ?? ""} placeholder="ej. 211" />
+                  <p className="mt-1 text-xs text-slate-500">Siigo no entregó la lista de vendedores. Escribe el ID del usuario vendedor (en Siigo: Configuración → Usuarios).</p>
+                </div>
+              )}
               <Select name="paymentId" label="Forma de pago predeterminada" value={suggested.paymentId} options={catalogs.paymentTypes.map((p) => [p.id, `${p.name} · ${p.type} (${p.id})`])} required />
               <Select name="costCenterId" label="Centro de costo (opcional)" value={defaults.costCenterId} options={catalogs.costCenters.map((c) => [c.id, `${c.code} · ${c.name}`])} />
               <div>

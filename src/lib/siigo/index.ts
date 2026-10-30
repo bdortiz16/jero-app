@@ -44,7 +44,8 @@ export async function refreshCatalogs(): Promise<Catalogs> {
   const documentTypes = await s.documentTypes("FV");
   const taxes = await s.taxes();
   const paymentTypes = await s.paymentTypes("FV");
-  const users = await s.users();
+  // Algunas cuentas no permiten listar usuarios: se sigue sin vendedores (se puede escribir el ID a mano).
+  const users = await s.users().catch(() => []);
   const costCenters = await s.costCenters().catch(() => []);
   const catalogs: Catalogs = {
     // Solo se ocultan los que Siigo marca explícitamente como inactivos (algunos no traen el campo "active").
@@ -73,4 +74,14 @@ export function resolveDocumentId(defaults: { documentId: number | null }, catal
   if (docs.length === 1) return docs[0].id;
   const electronic = docs.filter((d) => /electr/i.test(d.name));
   return electronic.length === 1 ? electronic[0].id : null;
+}
+
+/** Vendedor a usar: el configurado o, si no hay, el primero que entrega Siigo. */
+export function resolveSellerId(defaults: { sellerId: number | null }, catalogs: Catalogs | null): number | null {
+  return defaults.sellerId ?? catalogs?.sellers[0]?.id ?? null;
+}
+
+/** Valores por defecto con comprobante y vendedor resueltos (para armar facturas). */
+export function effectiveDefaults<T extends { documentId: number | null; sellerId: number | null }>(defaults: T, catalogs: Catalogs | null): T {
+  return { ...defaults, documentId: resolveDocumentId(defaults, catalogs), sellerId: resolveSellerId(defaults, catalogs) };
 }

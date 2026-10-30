@@ -248,7 +248,7 @@ export function buildInvoices(rows: RawRow[], ctx: BuildContext): { invoices: Bu
     }
     const sellerId = str(r.vendedor) ? parseNumber(r.vendedor) : ctx.defaults.sellerId;
     if (!sellerId) {
-      fail("Falta vendedor (columna vendedor o predeterminado en Admin → Siigo)");
+      fail("Falta el vendedor: elígelo (o escribe su ID) en Conexión Siigo → Valores por defecto y pulsa Guardar valores");
       continue;
     }
     let dueDate: string | undefined;

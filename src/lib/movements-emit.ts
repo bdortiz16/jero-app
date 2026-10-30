@@ -2,7 +2,7 @@ import "server-only";
 import { and, asc, eq, inArray } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import type { Movement } from "@/db/schema";
-import { getCatalogs, getSiigo, resolveDocumentId, type SiigoApi } from "./siigo";
+import { effectiveDefaults, getCatalogs, getSiigo, type SiigoApi } from "./siigo";
 import { companyAllowed, getSiigoDefaults, noteForCompany, type SiigoDefaults } from "./settings";
 import { buildInvoices, toSiigoRequest } from "./batch/build";
 import { DEFAULT_COMMISSION_CONFIG, expandCommissionRows, type CommissionModelConfig } from "./batch/commission";
@@ -115,7 +115,7 @@ export async function emitMovement(movementId: number, userId: string): Promise<
       },
     );
     const { invoices, errors } = buildInvoices(exp.rows, {
-      defaults: { ...defaults, documentId: resolveDocumentId(defaults, catalogs) },
+      defaults: effectiveDefaults(defaults, catalogs),
       taxes: catalogs?.taxes ?? [],
       paymentTypes: catalogs?.paymentTypes ?? [],
       productTaxes: new Map(),
