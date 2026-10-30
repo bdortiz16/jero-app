@@ -9,6 +9,8 @@ import { DEFAULT_COMMISSION_CONFIG, expandCommissionRows, type CommissionModelCo
 import { siigoName } from "./movements";
 import { todayBogota } from "./format";
 
+export const THIRD_PARTY_TEXT = "Operación recibida para terceros";
+
 const day = (d: Date | null) => (d ? d.toLocaleDateString("en-CA", { timeZone: "America/Bogota" }) : "?");
 
 /** Modelo de negocio activo con el que se facturan los movimientos (el primero activo). */
@@ -124,12 +126,11 @@ export async function emitMovement(movementId: number, userId: string): Promise<
     });
     const built = invoices[0];
     if (!built) throw await fail([...exp.errors, ...errors].map((e) => e.message).join(" · ") || "No se pudo armar la factura");
-    // Leyenda de la empresa (ej. contrato de mandato KAUPALOKI–JERO): en la descripción del ítem de terceros y en observaciones.
+    // Descripción del ítem de terceros: "Operación recibida para terceros - NOMBRE DEL CLIENTE".
+    const third = built.payload.items.find((i) => i.code === model.cfg.thirdPartyCode) ?? built.payload.items[0];
+    third.description = `${THIRD_PARTY_TEXT} - ${m.customerName}`.slice(0, 250);
+    // Observaciones: la leyenda de la empresa (ej. contrato de mandato KAUPALOKI–JERO) y el detalle de los retiros.
     const note = noteForCompany(m.company, defaults.companyNotes);
-    if (note) {
-      const third = built.payload.items.find((i) => i.code === model.cfg.thirdPartyCode) ?? built.payload.items[0];
-      third.description = `${third.description ?? model.cfg.thirdPartyDescription}. ${note}`;
-    }
     built.payload.observations =
       (note ? `${note} ` : "") +
       `${m.company} · Retiros del ${day(m.dateFrom)} al ${day(m.dateTo)}` +

@@ -15,6 +15,8 @@ import { SummaryTable } from "@/components/modal";
 import { emitMovementAction } from "../actions";
 import { ImportMovementsForm } from "./import-form";
 import { BulkEmit } from "./bulk-emit";
+import { ClickableRow, SidePanel } from "./row-and-panel";
+import { MovementDetail } from "./movement-detail";
 
 export const metadata = { title: "Movimientos" };
 const PAGE = 100;
@@ -32,10 +34,10 @@ const statusStyle: Record<string, string> = {
 export default async function MovimientosPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; empresa?: string; estado?: string; p?: string; min?: string; max?: string; orden?: string }>;
+  searchParams: Promise<{ q?: string; empresa?: string; estado?: string; p?: string; min?: string; max?: string; orden?: string; ver?: string }>;
 }) {
   const user = await requireUser();
-  const { q = "", empresa = "", estado = "", p = "1", min = "", max = "", orden = "" } = await searchParams;
+  const { q = "", empresa = "", estado = "", p = "1", min = "", max = "", orden = "", ver = "" } = await searchParams;
   const page = Math.max(1, Number(p) || 1);
   const db = await getDb();
   const [defaults, model, catalogs] = await Promise.all([getSiigoDefaults(), activeModel(), getCatalogs()]);
@@ -127,10 +129,10 @@ export default async function MovimientosPage({
               const iva = model && !model.cfg.ivaIncluded ? round2((commission * ivaPct) / 100) : 0;
               const otherCompany = !companyAllowed(m.company, defaults.issuerCompanies);
               return (
-                <tr key={m.id}>
+                <ClickableRow key={m.id} href={href(page, { ver: String(m.id) })} selected={ver === String(m.id)}>
                   <td className="text-slate-400">{m.rowNumber ?? ""}</td>
                   <td>{m.company}</td>
-                  <td><Link href={`/app/movimientos/${m.id}`} className="text-brand-700 hover:underline">{m.customerName}</Link></td>
+                  <td><Link href={href(page, { ver: String(m.id) })} scroll={false} className="text-brand-700 hover:underline">{m.customerName}</Link></td>
                   <td className="font-mono text-xs">
                     {m.identificationRaw}
                     {m.checkDigit && <div className="text-slate-400">NIT {m.identification}-{m.checkDigit}</div>}
@@ -143,7 +145,7 @@ export default async function MovimientosPage({
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusStyle[m.status] ?? ""}`}>{m.status}</span>
                     {m.error && <div className="mt-1 max-w-xs text-xs text-red-600">{m.error}</div>}
                     {m.invoiceId && m.status === "facturado" && (
-                      <div><Link className="text-xs text-brand-700 hover:underline" href={`/app/movimientos/${m.id}`}>Ver factura</Link></div>
+                      <div><Link className="text-xs text-brand-700 hover:underline" href={href(page, { ver: String(m.id) })} scroll={false}>Ver factura</Link></div>
                     )}
                   </td>
                   <td className="text-right">
@@ -163,7 +165,7 @@ export default async function MovimientosPage({
                       )
                     )}
                   </td>
-                </tr>
+                </ClickableRow>
               );
             })}
             {rows.length === 0 && <tr><td colSpan={10} className="py-8 text-center text-slate-500">No hay movimientos con estos filtros.</td></tr>}
@@ -171,6 +173,14 @@ export default async function MovimientosPage({
         </table>
       </div>
       <Pager page={page} hasMore={rows.length > PAGE} href={(n) => href(n)} />
+      {ver && (
+        <SidePanel closeHref={href(page)} title="Movimiento">
+          <MovementDetail id={Number(ver)} role={user.role} inPanel />
+          <div className="mt-4 text-right">
+            <Link href={`/app/movimientos/${ver}`} className="text-sm text-brand-700 hover:underline">Abrir en página completa →</Link>
+          </div>
+        </SidePanel>
+      )}
     </>
   );
 }
@@ -196,7 +206,7 @@ function EmitSummary({
 }) {
   const ret = retention ? round2((commission * retention.pct) / 100) : 0;
   const rows: [string, string][] = [
-    ["Ingresos de terceros (02)", money(amount)],
+    ["Operación recibida para terceros (02)", money(amount)],
     [`Comisión ${pct}% (01)`, money(commission)],
     ...(iva ? ([[`IVA ${ivaPct}% de la comisión`, money(iva)]] as [string, string][]) : []),
     ...(retention ? ([[`${retention.name}`, `− ${money(ret)}`]] as [string, string][]) : []),
@@ -210,7 +220,10 @@ function EmitSummary({
         </div>
       </div>
       <SummaryTable rows={rows} total={["Total a pagar", money(round2(amount + commission + iva - ret))]} />
-      {note && <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700"><b>Leyenda:</b> {note}</p>}
+      <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-700">
+        <b>Descripción:</b> Operación recibida para terceros - {m.customerName}
+        {note && <><br /><b>Observaciones:</b> {note}</>}
+      </p>
       <p className="text-xs text-slate-500">La factura se crea en Siigo y se envía a la DIAN. Esta acción no se puede deshacer desde Jero.</p>
     </div>
   );

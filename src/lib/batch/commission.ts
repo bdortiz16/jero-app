@@ -25,7 +25,7 @@ export type CommissionModelConfig = {
 
 export const DEFAULT_COMMISSION_CONFIG: CommissionModelConfig = {
   thirdPartyCode: "02",
-  thirdPartyDescription: "Ingresos de Terceros",
+  thirdPartyDescription: "Operación recibida para terceros",
   commissionCode: "01",
   commissionDescription: "Comisión por Operaciones",
   ivaTaxId: 0,
