@@ -30,8 +30,14 @@ async function workersDb(): Promise<DB> {
 async function createLocal(): Promise<{ db: DB; ready: Promise<void> }> {
   const url = databaseUrl();
   if (url) {
-    const client = postgres(url, { max: process.env.VERCEL ? 1 : 5, prepare: false });
-    return { db: drizzlePostgres(client, { schema }), ready: Promise.resolve() };
+    const client = postgres(url, { max: process.env.VERCEL ? 1 : 5, prepare: false, onnotice: () => {} });
+    const db = drizzlePostgres(client, { schema });
+    // En Vercel (o con AUTO_MIGRATE=true) las tablas se crean/actualizan solas al arrancar: no depende del build.
+    if (process.env.VERCEL || process.env.AUTO_MIGRATE === "true") {
+      const [{ migrate }, path] = await Promise.all([import("drizzle-orm/postgres-js/migrator"), import("node:path")]);
+      return { db, ready: migrate(db, { migrationsFolder: path.join(process.cwd(), "drizzle") }) };
+    }
+    return { db, ready: Promise.resolve() };
   }
   if (process.env.VERCEL) {
     throw new Error("Falta la base de datos: agrega DATABASE_URL (Supabase) en las variables de entorno de Vercel.");
