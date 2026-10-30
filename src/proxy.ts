@@ -15,6 +15,8 @@ export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
   const cfg = supabaseConfig();
   if (!cfg) return response;
+  // Solo navegaciones GET: los envíos de formularios/acciones (con archivos) pasan directo, sin tocar el cuerpo.
+  if (request.method !== "GET") return response;
   // Las precargas de Next no necesitan renovar la sesión (evita viajes extra a Supabase).
   if (request.headers.get("next-router-prefetch") || request.headers.get("purpose") === "prefetch") return response;
   const supabase = createServerClient(cfg.url, cfg.key, {

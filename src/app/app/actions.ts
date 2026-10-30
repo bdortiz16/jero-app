@@ -2,12 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { requireAdmin, requireEditor } from "@/lib/session";
 import { audit } from "@/lib/audit";
 import { parseFile } from "@/lib/batch/parse";
-import { buildInvoices, parseNumber, type RowError } from "@/lib/batch/build";
+import { buildInvoices, parseNumber, type RawRow, type RowError } from "@/lib/batch/build";
 import { DEFAULT_COMMISSION_CONFIG, expandCommissionRows, type CommissionModelConfig } from "@/lib/batch/commission";
 import { getCatalogs, getSiigo, refreshCatalogs } from "@/lib/siigo";
 import { getSiigoDefaults, saveSiigoCredentials, setSetting, type SiigoDefaults } from "@/lib/settings";
@@ -20,14 +20,40 @@ const errMsg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 // ---------- Facturación masiva ----------
 
 export async function uploadBatch(_: ActionState, fd: FormData): Promise<ActionState> {
-  const user = await requireEditor();
   const file = fd.get("file");
   if (!(file instanceof File) || file.size === 0) return { error: "Seleccione un archivo .csv o .xlsx" };
   if (file.size > 8 * 1024 * 1024) return { error: "El archivo supera 8 MB" };
+  let rows: RawRow[];
+  try {
+    rows = await parseFile(file.name, await file.arrayBuffer());
+  } catch (e) {
+    return { error: errMsg(e) };
+  }
+  return uploadBatchRows({
+    fileName: file.name,
+    name: String(fd.get("name") ?? ""),
+    modelId: Number(fd.get("modelId")) || null,
+    pct: String(fd.get("pct") ?? ""),
+    rows,
+  });
+}
+
+/** Crea el lote a partir de las filas ya leídas (el navegador lee el archivo y envía solo los datos). */
+export async function uploadBatchRows(input: {
+  fileName: string;
+  name: string;
+  modelId: number | null;
+  pct: string;
+  rows: RawRow[];
+}): Promise<ActionState> {
+  const user = await requireEditor();
+  const file = { name: input.fileName };
+  if (!Array.isArray(input.rows) || input.rows.length === 0) return { error: "El archivo no tiene filas de datos" };
+  if (input.rows.length > 5000) return { error: "Máximo 5000 filas por archivo" };
 
   let batchId: number;
   try {
-    let rows = await parseFile(file.name, await file.arrayBuffer());
+    let rows = input.rows;
     const db = await getDb();
     const [defaults, catalogs, products, customers] = await Promise.all([
       getSiigoDefaults(),
@@ -45,7 +71,7 @@ export async function uploadBatch(_: ActionState, fd: FormData): Promise<ActionS
     ]);
 
     // Modelo de negocio: convierte el archivo propio (ej. dispersiones) en ítems estándar.
-    const modelId = Number(fd.get("modelId")) || null;
+    const modelId = input.modelId || null;
     let params: Record<string, unknown> | null = null;
     const modelErrors: RowError[] = [];
     if (modelId) {
@@ -54,7 +80,7 @@ export async function uploadBatch(_: ActionState, fd: FormData): Promise<ActionS
       const cfg = { ...DEFAULT_COMMISSION_CONFIG, ...(model.config as Partial<CommissionModelConfig>) };
       const iva = catalogs?.taxes.find((t) => t.id === cfg.ivaTaxId);
       if (!iva) return { error: `El modelo "${model.name}" no tiene un IVA válido. Revísalo en Modelos de negocio.` };
-      const pctRaw = String(fd.get("pct") ?? "").trim();
+      const pctRaw = String(input.pct ?? "").trim();
       const pct = pctRaw ? parseNumber(pctRaw.replace("%", "")) : cfg.defaultPct;
       if (pct === null || pct < 0 || pct > 100) return { error: "% de comisión inválido" };
       const companies = new Set(customers.filter((c) => c.personType === "Company" && c.idType === "31").map((c) => c.id));
@@ -111,7 +137,7 @@ export async function uploadBatch(_: ActionState, fd: FormData): Promise<ActionS
       return { error: `No hay facturas válidas en el archivo. ${first.join(" · ")}` };
     }
 
-    const name = String(fd.get("name") || "").trim() || `${file.name} (${todayBogota()})`;
+    const name = String(input.name || "").trim() || `${file.name} (${todayBogota()})`;
     const totalAmount = invoices.reduce((s, i) => s + i.total, 0).toFixed(2);
     batchId = await db.transaction(async (tx) => {
       const [batch] = await tx
@@ -418,6 +444,69 @@ export async function importMovements(_: ActionState, fd: FormData): Promise<Act
     return {
       ok: `${inserted} movimientos cargados${skipped ? ` (${skipped} ya existían)` : ""}${errors.length ? ` · ${errors.length} filas con error` : ""}. ${seen.size} clientes.`,
     };
+  } catch (e) {
+    return { error: errMsg(e) };
+  }
+}
+
+export type MovementDTO = Omit<import("@/lib/movements").ParsedMovement, "dateFrom" | "dateTo"> & {
+  dateFrom: string | null;
+  dateTo: string | null;
+};
+
+/** Guarda un bloque de movimientos ya leídos en el navegador. El primer bloque crea el registro de la carga. */
+export async function importMovementsChunk(input: {
+  importId: number | null;
+  fileName: string;
+  total: number;
+  movements: MovementDTO[];
+}): Promise<{ importId?: number; inserted?: number; error?: string }> {
+  const user = await requireEditor();
+  if (!Array.isArray(input.movements) || input.movements.length > 1000) return { error: "Bloque inválido" };
+  try {
+    const db = await getDb();
+    let importId = input.importId;
+    if (!importId) {
+      const [imp] = await db
+        .insert(schema.movementImports)
+        .values({ fileName: input.fileName.slice(0, 200), rowCount: input.total, createdBy: user.id })
+        .returning({ id: schema.movementImports.id });
+      importId = imp.id;
+      await audit(user, "movements.import", { file: input.fileName, rows: input.total });
+    }
+    const values = input.movements.map((m) => ({
+      ...m,
+      importId: importId!,
+      amount: Number(m.amount).toFixed(2),
+      dateFrom: m.dateFrom ? new Date(m.dateFrom) : null,
+      dateTo: m.dateTo ? new Date(m.dateTo) : null,
+    }));
+    const inserted = values.length
+      ? (await db.insert(schema.movements).values(values).onConflictDoNothing().returning({ id: schema.movements.id })).length
+      : 0;
+    if (inserted) {
+      await db
+        .update(schema.movementImports)
+        .set({ newCount: sql`${schema.movementImports.newCount} + ${inserted}` })
+        .where(eq(schema.movementImports.id, importId));
+    }
+    // Los clientes del archivo quedan registrados en Jero; en Siigo se crean al emitir si no existen.
+    const seen = new Set<string>();
+    const customers = input.movements.filter((m) => !seen.has(m.identification) && seen.add(m.identification));
+    if (customers.length) {
+      await db
+        .insert(schema.customers)
+        .values(customers.map((m) => ({
+          identification: m.identification,
+          branchOffice: 0,
+          name: m.customerName,
+          personType: m.personType,
+          idType: m.personType === "Company" ? "31" : "13",
+        })))
+        .onConflictDoNothing();
+    }
+    revalidatePath("/app/movimientos");
+    return { importId, inserted };
   } catch (e) {
     return { error: errMsg(e) };
   }

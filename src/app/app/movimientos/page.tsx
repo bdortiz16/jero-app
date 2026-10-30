@@ -9,8 +9,9 @@ import { commissionFor } from "@/lib/batch/commission";
 import { rowsOf } from "@/lib/batch/process";
 import { money, round2 } from "@/lib/format";
 import { Alert, PageHeader, Pager, Stat } from "@/components/ui";
-import { ActionButton, ActionForm, Submit } from "@/components/forms";
-import { emitMovementAction, importMovements } from "../actions";
+import { ActionButton } from "@/components/forms";
+import { emitMovementAction } from "../actions";
+import { ImportMovementsForm } from "./import-form";
 
 export const metadata = { title: "Movimientos" };
 const PAGE = 100;
@@ -72,12 +73,7 @@ export default async function MovimientosPage({
       {canEmit && (
         <div className="card mb-6">
           <h2 className="mb-3 font-semibold">Cargar archivo de movimientos</h2>
-          <ActionForm action={importMovements} className="flex flex-wrap items-end gap-3">
-            <div className="min-w-[280px] flex-1">
-              <input name="file" type="file" accept=".xlsx,.csv" required className="input file:mr-3 file:rounded file:border-0 file:bg-brand-50 file:px-3 file:py-1 file:text-brand-700" />
-            </div>
-            <Submit>Cargar movimientos</Submit>
-          </ActionForm>
+          <ImportMovementsForm />
           <p className="mt-2 text-xs text-slate-500">
             Formato "Facturas por emitir": #, Empresa que factura, Cliente (beneficiario), Identificación, # retiros, Desde, Hasta, Valor a facturar.
             Si vuelves a subir el mismo archivo, los movimientos repetidos se ignoran.
