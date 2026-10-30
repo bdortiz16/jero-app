@@ -13,7 +13,7 @@ export default async function NuevaClave() {
     <div className="grid min-h-screen place-items-center bg-slate-50 px-4">
       <div className="card w-full max-w-sm space-y-6 p-8">
         <div className="text-center">
-          <Logo className="text-2xl" />
+          <Logo size={44} />
           <p className="mt-3 text-sm text-slate-500">Nueva contraseña para <b>{email}</b></p>
         </div>
         <ActionForm action={updatePasswordAction} className="space-y-4">

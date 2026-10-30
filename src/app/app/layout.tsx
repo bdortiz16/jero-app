@@ -45,7 +45,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <div className="flex min-h-screen">
       <aside className="sticky top-0 flex h-screen w-64 shrink-0 flex-col bg-brand-900 p-4 text-white">
         <div className="mb-8 px-2">
-          <Logo className="text-lg" />
+          <Logo tone="dark" size={34} />
         </div>
         <div className="flex-1 overflow-y-auto">
           <Nav sections={sections} />

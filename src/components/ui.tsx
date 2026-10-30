@@ -1,3 +1,4 @@
+import { BrandLogo } from "./brand";
 import Link from "next/link";
 
 const statusStyles: Record<string, string> = {
@@ -77,11 +78,6 @@ export function Pager({ page, hasMore, href }: { page: number; hasMore: boolean;
   );
 }
 
-export function Logo({ className = "" }: { className?: string }) {
-  return (
-    <span className={`inline-flex items-center gap-2 font-semibold tracking-tight ${className}`}>
-      <span className="grid h-8 w-8 place-items-center rounded-lg bg-brand-600 text-white">J</span>
-      Jero
-    </span>
-  );
+export function Logo({ className = "", tone = "light", size = 36 }: { className?: string; tone?: "light" | "dark"; size?: number }) {
+  return <BrandLogo className={className} tone={tone} size={size} />;
 }

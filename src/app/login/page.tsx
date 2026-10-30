@@ -24,7 +24,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
           ×
         </Link>
         <div className="text-center">
-          <Link href="/"><Logo className="text-2xl" /></Link>
+          <Link href="/"><Logo size={44} /></Link>
           <p className="mt-3 text-sm text-slate-500">Ingresa para gestionar tu facturación</p>
         </div>
         {error && <Alert kind="error">{errors[error] ?? "No fue posible iniciar sesión. Intenta de nuevo."}</Alert>}

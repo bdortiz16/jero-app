@@ -10,7 +10,7 @@ export default async function Pendiente() {
   return (
     <div className="grid min-h-screen place-items-center bg-slate-50 px-4">
       <div className="card max-w-md space-y-4 p-8 text-center">
-        <Logo className="text-2xl" />
+        <Logo size={44} />
         <h1 className="text-lg font-semibold">Tu cuenta está pendiente de aprobación</h1>
         <p className="text-sm text-slate-600">
           Ingresaste como <b>{user.email}</b>. Un administrador de Jero debe aprobar tu acceso.

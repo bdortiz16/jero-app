@@ -16,7 +16,7 @@ export default async function Home() {
   return (
     <div className="min-h-screen bg-white">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-        <Logo className="text-xl" />
+        <Logo size={36} />
         <nav className="flex items-center gap-3">
           <a href="#funciones" className="hidden text-sm text-slate-600 hover:text-slate-900 sm:block">Funciones</a>
           <a href="#como" className="hidden text-sm text-slate-600 hover:text-slate-900 sm:block">Cómo funciona</a>

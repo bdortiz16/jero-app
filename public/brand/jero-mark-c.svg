@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Jero Contable">
+  <circle cx="32" cy="32" r="32" fill="#17734f"/>
+  <!-- J con trazo de visto bueno (factura aprobada) -->
+  <path d="M40 15v19c0 9-5.5 14.5-13 14.5-5 0-8.6-2.4-10.4-6.4" fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round"/>
+  <path d="M33 23l4 4 9-10" fill="none" stroke="#f5b82e" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
