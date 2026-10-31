@@ -50,3 +50,11 @@ describe("leyendas por empresa", () => {
     expect(noteForCompany("JERO", notes)).toBeNull();
   });
 });
+
+describe("nombres para Siigo", () => {
+  it("quita comillas, apóstrofos y cambia & por Y", () => {
+    expect(siigoName('FUNDACION "ARQUITECTOS DE IDEAS"', "Company")).toEqual(["FUNDACION ARQUITECTOS DE IDEAS"]);
+    expect(siigoName("APP'S & LOGISTIC GROUP S.A.S.", "Company")).toEqual(["APPS Y LOGISTIC GROUP S.A.S."]);
+    expect(siigoName("José Peña-Gómez", "Person")).toEqual(["José", "Peña-Gómez"]);
+  });
+});

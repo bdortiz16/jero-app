@@ -46,7 +46,10 @@ async function ensureCustomer(siigo: SiigoApi, m: Movement, defaults: SiigoDefau
         city: { country_code: "Co", state_code: defaults.newCustomerStateCode, city_code: defaults.newCustomerCityCode },
       },
       ...(defaults.newCustomerEmail
-        ? { contacts: [{ first_name: names[0], last_name: names[1] ?? names[0], email: defaults.newCustomerEmail }] }
+        ? {
+            // Siigo limita el nombre completo del contacto a 101 caracteres.
+            contacts: [{ first_name: names[0].slice(0, 50).trim(), last_name: (names[1] ?? names[0]).slice(0, 50).trim(), email: defaults.newCustomerEmail }],
+          }
         : {}),
     });
   }

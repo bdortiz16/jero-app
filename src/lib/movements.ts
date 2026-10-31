@@ -34,8 +34,20 @@ export function parseIdentification(raw: string, name = "") {
 }
 
 /** Siigo pide [nombres, apellidos] para personas naturales y [razón social] para empresas. */
+/**
+ * Siigo rechaza nombres con comillas, apóstrofos, & y otros símbolos ("invalid_name").
+ * Se deja solo letras, números, espacio, punto, coma y guion; "&" pasa a "Y".
+ */
+export function cleanSiigoName(fullName: string) {
+  return fullName
+    .replace(/&/g, " Y ")
+    .replace(/[^\p{L}\p{N} .,\-]/gu, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export function siigoName(fullName: string, personType: "Person" | "Company"): string[] {
-  const name = fullName.replace(/\s+/g, " ").trim();
+  const name = cleanSiigoName(fullName);
   if (personType === "Company") return [name];
   const w = name.split(" ");
   if (w.length === 1) return [w[0], w[0]];
