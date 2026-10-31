@@ -24,6 +24,17 @@ function setup(responses: ((url: string, init: RequestInit) => Response)[]) {
 const json = (body: unknown, status = 200) => () => new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 
 describe("SiigoClient", () => {
+  it("reintenta cuando Siigo está caído temporalmente", async () => {
+    const { client, calls } = setup([
+      json({ access_token: "tok", expires_in: 86400 }),
+      json({ Errors: [{ Code: "documents_service", Message: "The Documents service is currently unavailable. Please try in a few minutes" }] }, 400),
+      json({ id: "abc", name: "FV-1-1" }),
+    ]);
+    const res = await client.getInvoice("abc");
+    expect(res.name).toBe("FV-1-1");
+    expect(calls).toHaveLength(3);
+  }, 10_000);
+
   it("authenticates with Partner-Id, caches token and sends Bearer", async () => {
     const { client, calls } = setup([
       json({ access_token: "tok", expires_in: 86400, token_type: "Bearer" }),

@@ -110,7 +110,17 @@ export class SiigoClient implements SiigoApi {
       }
       if (!res.ok) {
         const errBody = await safeJson(res);
-        throw new SiigoError(describe(errBody) || `Siigo respondió ${res.status} ${res.statusText}`, res.status, errBody);
+        const message = describe(errBody) || `Siigo respondió ${res.status} ${res.statusText}`;
+        // Caída temporal de Siigo (ej. "The Documents service is currently unavailable"): la petición no se
+        // procesó, así que se reintenta unas veces con espera antes de darla por fallida.
+        if (isSiigoUnavailable(res.status, message)) {
+          if (attempt < 2) {
+            await new Promise((r) => setTimeout(r, 3000 * (attempt + 1)));
+            continue;
+          }
+          throw new SiigoError(`Siigo no está disponible en este momento (falla de Siigo, no de la factura). Reintenta en unos minutos. Detalle: ${message}`, res.status, errBody);
+        }
+        throw new SiigoError(message, res.status, errBody);
       }
       if (res.status === 204) return undefined as T;
       return (await res.json()) as T;
@@ -196,6 +206,11 @@ export function describe(body?: SiigoErrorBody): string {
  * Siigo solo acepta llaves de idempotencia alfanuméricas: se deriva una de 32 caracteres (hex) estable
  * a partir del identificador interno, para que el mismo envío repetido no cree dos facturas.
  */
+/** Errores de Siigo que indican una caída temporal del servicio (no un problema de los datos enviados). */
+export function isSiigoUnavailable(status: number, message: string) {
+  return status === 502 || status === 503 || status === 504 || /currently unavailable|service unavailable|try (again )?in a few minutes/i.test(message);
+}
+
 export function siigoIdempotencyKey(source: string): string {
   return createHash("sha256").update(source).digest("hex").slice(0, 32);
 }

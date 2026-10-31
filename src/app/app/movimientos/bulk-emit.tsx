@@ -217,7 +217,7 @@ export function BulkEmit({ filters, initialJob }: { filters: Filters; initialJob
                   : `Duración total: ${duration(elapsed).replace("≈ ", "")}.`,
             }}
           />
-          {job.error && job.status === "running" && <p className="text-xs text-red-600">Último aviso del servidor: {job.error}</p>}
+          {job.error && job.status !== "done" && <p className="text-sm text-red-700">{job.status === "running" ? "Último aviso del servidor: " : ""}{job.error}</p>}
           <div className="max-h-80 overflow-y-auto rounded-lg border border-slate-200">
             <table className="table">
               <thead><tr><th>Cliente</th><th>Estado</th><th>Detalle</th></tr></thead>

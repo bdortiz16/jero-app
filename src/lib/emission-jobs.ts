@@ -103,6 +103,8 @@ export async function runJobSlice(jobId: number): Promise<{ continue: boolean }>
   };
 
   let status = "running";
+  // Si Siigo está caído, se detiene el trabajo en vez de marcar con error todo lo que queda.
+  let unavailableInARow = 0;
   const inFlight = new Map<number, { id: number; name: string; text: string }>();
   const worker = async () => {
     while (status === "running" && cursor < job.itemIds.length && Date.now() - started < SLICE_MS) {
@@ -114,6 +116,7 @@ export async function runJobSlice(jobId: number): Promise<{ continue: boolean }>
         const number = await emitMovement(id, job.createdBy ?? "");
         ok++;
         results.push({ id, name, status: "ok", text: number, at: new Date().toISOString() });
+        unavailableInARow = 0;
       } catch (e) {
         const msg = (e as Error).message;
         // Ya facturado o en curso en otra parte: no es un error del lote.
@@ -121,9 +124,22 @@ export async function runJobSlice(jobId: number): Promise<{ continue: boolean }>
           failed++;
           results.push({ id, name, status: "error", text: msg.slice(0, 300), at: new Date().toISOString() });
         }
+        unavailableInARow = /no está disponible en este momento/.test(msg) ? unavailableInARow + 1 : 0;
+        if (unavailableInARow >= 3 && status === "running") {
+          status = "cancelled";
+          await db
+            .update(schema.emissionJobs)
+            .set({
+              status: "cancelled",
+              finishedAt: new Date(),
+              error: "Siigo no está disponible en este momento: se detuvo la emisión. En unos minutos pulsa \"Reintentar los con error\" y luego \"Emitir masivamente\".",
+            })
+            .where(eq(schema.emissionJobs.id, jobId));
+        }
       }
       inFlight.delete(id);
-      status = await save([...inFlight.values()]);
+      const saved = await save([...inFlight.values()]);
+      if (status === "running") status = saved;
     }
   };
   await Promise.all(Array.from({ length: PARALLEL }, worker));
