@@ -55,7 +55,12 @@ export default async function ReportesPage({ searchParams }: { searchParams: Pro
       <PageHeader
         title="Reportes contables"
         description="Basado en las facturas emitidas en Siigo desde Jero. Lo recibido para terceros no es ingreso: tu ingreso es la comisión."
-        actions={<a className="btn-primary" href={`/api/reportes/ventas?${q}`}>Libro de ventas (CSV)</a>}
+        actions={
+          <>
+            <a className="btn-primary" href={`/api/reportes/excel?${q}`}>Libro de ventas (Excel)</a>
+            <a className="btn-secondary" href={`/api/reportes/ventas?${q}`}>CSV</a>
+          </>
+        }
       />
       <form className="mb-3 flex flex-wrap items-end gap-3">
         <div><label className="label">Desde</label><input type="date" name="desde" defaultValue={desde} className="input" /></div>
