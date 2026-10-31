@@ -46,11 +46,22 @@ export function cleanSiigoName(fullName: string) {
     .trim();
 }
 
+/** Siigo arma el contacto principal con el nombre del cliente y lo limita a 101 caracteres. */
+export const SIIGO_NAME_MAX = 100;
+
+/** Recorta en el último espacio antes del límite para no partir palabras. */
+function cut(text: string, max: number) {
+  if (text.length <= max) return text;
+  const part = text.slice(0, max + 1);
+  const at = part.lastIndexOf(" ");
+  return (at > max * 0.6 ? part.slice(0, at) : text.slice(0, max)).trim();
+}
+
 export function siigoName(fullName: string, personType: "Person" | "Company"): string[] {
-  const name = cleanSiigoName(fullName);
+  const name = cut(cleanSiigoName(fullName), SIIGO_NAME_MAX);
   if (personType === "Company") return [name];
   const w = name.split(" ");
-  if (w.length === 1) return [w[0], w[0]];
+  if (w.length === 1) return [w[0], w[0]].map((x) => cut(x, SIIGO_NAME_MAX / 2));
   if (w.length === 2) return [w[0], w[1]];
   if (w.length === 3) return [w[0], `${w[1]} ${w[2]}`];
   return [w.slice(0, w.length - 2).join(" "), w.slice(-2).join(" ")];

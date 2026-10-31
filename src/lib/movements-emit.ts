@@ -48,7 +48,7 @@ async function ensureCustomer(siigo: SiigoApi, m: Movement, defaults: SiigoDefau
       ...(defaults.newCustomerEmail
         ? {
             // Siigo limita el nombre completo del contacto a 101 caracteres.
-            contacts: [{ first_name: names[0].slice(0, 50).trim(), last_name: (names[1] ?? names[0]).slice(0, 50).trim(), email: defaults.newCustomerEmail }],
+            contacts: [{ first_name: names[0].slice(0, 49).trim(), last_name: (names[1] ?? names[0]).slice(0, 49).trim(), email: defaults.newCustomerEmail }],
           }
         : {}),
     });

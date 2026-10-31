@@ -58,3 +58,15 @@ describe("nombres para Siigo", () => {
     expect(siigoName("José Peña-Gómez", "Person")).toEqual(["José", "Peña-Gómez"]);
   });
 });
+
+describe("nombres largos para Siigo", () => {
+  it("recorta a 100 caracteres sin partir palabras", () => {
+    const largo = "TEAM FOODS COLOMBIA S A Y PODRA UTILIZAR LAS SIGLAS ACEGRASAS S A TECNOLOGIA EMPRESARIAL DE ALIMENTOS TEAM S A Y FAGRAVE S A";
+    const [n] = siigoName(largo, "Company");
+    expect(n.length).toBeLessThanOrEqual(100);
+    expect(largo.startsWith(n)).toBe(true);
+    expect(n.endsWith(" ")).toBe(false);
+    const p = siigoName("A".repeat(60) + " B C " + "D".repeat(60), "Person");
+    expect(p.join(" ").length).toBeLessThanOrEqual(101);
+  });
+});
