@@ -104,7 +104,7 @@ export default async function MovimientosPage({
       {canEmit && model && <BulkEmit filters={{ q, empresa, min, max, orden }} initialJob={jobView} />}
 
       <form className="mb-4 flex flex-wrap gap-2">
-        <input name="q" defaultValue={q} className="input max-w-xs" placeholder="Buscar cliente o identificación…" />
+        <input name="q" defaultValue={q} className="input max-w-xs" placeholder="Buscar cliente o identificación…" title="Puedes buscar varios a la vez separándolos con ;" />
         <select name="empresa" defaultValue={empresa} className="input max-w-[200px]">
           <option value="">Todas las empresas</option>
           {companies.map((c) => <option key={c.company} value={c.company}>{c.company}</option>)}

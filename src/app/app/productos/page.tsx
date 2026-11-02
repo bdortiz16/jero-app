@@ -1,4 +1,5 @@
 import { asc, ilike, or } from "drizzle-orm";
+import { nameMatches } from "@/lib/search";
 import { getDb, schema } from "@/db";
 import { requireUser } from "@/lib/session";
 import { getCatalogs } from "@/lib/siigo";
@@ -16,7 +17,7 @@ export default async function ProductosPage({ searchParams }: { searchParams: Pr
   const rows = await db
     .select()
     .from(schema.products)
-    .where(q ? or(ilike(schema.products.name, `%${q}%`), ilike(schema.products.code, `%${q}%`)) : undefined)
+    .where(q ? or(nameMatches(schema.products.name, q), ilike(schema.products.code, `%${q}%`)) : undefined)
     .orderBy(asc(schema.products.code))
     .limit(500);
   const catalogs = await getCatalogs();

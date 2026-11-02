@@ -4,6 +4,7 @@ import { getDb, schema } from "@/db";
 import { requireUser } from "@/lib/session";
 import { money } from "@/lib/format";
 import { PageHeader, Pager, StatusBadge } from "@/components/ui";
+import { idMatches, nameMatches } from "@/lib/search";
 import { ClickableRow, SidePanel } from "@/components/row-and-panel";
 import { InvoiceDetail } from "./invoice-detail";
 
@@ -18,7 +19,7 @@ export default async function FacturasPage({ searchParams }: { searchParams: Pro
   if (estado) where.push(eq(schema.invoices.status, estado));
   if (q) {
     const like = `%${q}%`;
-    where.push(or(ilike(schema.invoices.reference, like), ilike(schema.invoices.customerIdentification, like), ilike(schema.invoices.customerName, like), ilike(schema.invoices.siigoNumber, like))!);
+    where.push(or(ilike(schema.invoices.reference, like), ilike(schema.invoices.siigoNumber, like), idMatches(schema.invoices.customerIdentification, q), nameMatches(schema.invoices.customerName, q))!);
   }
   const db = await getDb();
   const rows = await db
@@ -34,7 +35,7 @@ export default async function FacturasPage({ searchParams }: { searchParams: Pro
     <>
       <PageHeader title="Facturas" description="Todas las facturas creadas desde Jero" />
       <form className="mb-4 flex flex-wrap gap-2">
-        <input name="q" defaultValue={q} className="input max-w-xs" placeholder="Buscar referencia, cliente, número…" />
+        <input name="q" defaultValue={q} className="input max-w-xs" placeholder="Buscar referencia, cliente, número…" title="Puedes buscar varios a la vez separándolos con ;" />
         <select name="estado" defaultValue={estado} className="input max-w-[180px]">
           <option value="">Todos los estados</option>
           <option value="sent">Emitidas</option>

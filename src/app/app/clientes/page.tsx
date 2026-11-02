@@ -1,4 +1,5 @@
-import { asc, ilike, or } from "drizzle-orm";
+import { asc, or } from "drizzle-orm";
+import { idMatches, nameMatches } from "@/lib/search";
 import { getDb, schema } from "@/db";
 import { requireUser } from "@/lib/session";
 import { dateTime } from "@/lib/format";
@@ -17,7 +18,7 @@ export default async function ClientesPage({ searchParams }: { searchParams: Pro
   const rows = await db
     .select()
     .from(schema.customers)
-    .where(q ? or(ilike(schema.customers.name, `%${q}%`), ilike(schema.customers.identification, `%${q}%`)) : undefined)
+    .where(q ? or(nameMatches(schema.customers.name, q), idMatches(schema.customers.identification, q)) : undefined)
     .orderBy(asc(schema.customers.name))
     .limit(PAGE + 1)
     .offset((page - 1) * PAGE);
@@ -30,7 +31,7 @@ export default async function ClientesPage({ searchParams }: { searchParams: Pro
         actions={user.role !== "USUARIO" && <ActionButton action={syncCustomers} className="btn-primary">Sincronizar desde Siigo</ActionButton>}
       />
       <form className="mb-4 flex gap-2">
-        <input name="q" defaultValue={q} className="input max-w-xs" placeholder="Buscar nombre o NIT…" />
+        <input name="q" defaultValue={q} className="input max-w-xs" placeholder="Buscar nombre o NIT…" title="Puedes buscar varios a la vez separándolos con ;" />
         <button className="btn-secondary">Buscar</button>
       </form>
       <div className="card overflow-x-auto p-0">

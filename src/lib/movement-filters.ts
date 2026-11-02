@@ -1,4 +1,5 @@
-import { asc, desc, eq, gte, ilike, lte, or, type SQL } from "drizzle-orm";
+import { asc, desc, eq, gte, lte, or, type SQL } from "drizzle-orm";
+import { idMatches, nameMatches } from "./search";
 import { schema } from "@/db/schema-export";
 
 export type MovementFilters = { q?: string; empresa?: string; estado?: string; min?: string; max?: string; orden?: string };
@@ -16,8 +17,8 @@ export function movementWhere(f: MovementFilters): SQL[] {
   if (f.empresa) where.push(eq(m.company, f.empresa));
   if (f.estado) where.push(eq(m.status, f.estado));
   if (f.q) {
-    const like = `%${f.q}%`;
-    where.push(or(ilike(m.customerName, like), ilike(m.identificationRaw, like))!);
+    const match = or(nameMatches(m.customerName, f.q), idMatches(m.identificationRaw, f.q));
+    if (match) where.push(match);
   }
   const min = num(f.min);
   const max = num(f.max);
