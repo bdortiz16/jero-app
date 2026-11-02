@@ -29,6 +29,17 @@ export async function getSiigo(): Promise<SiigoApi> {
   });
 }
 
+/** Prueba unas credenciales sin guardarlas (para no reemplazar unas que funcionan por otras que fallan). */
+export async function testSiigoCredentials(creds: { username: string; accessKey: string; partnerId: string }) {
+  if (siigoMockEnabled()) return;
+  let token: { token: string; expiresAt: number } | null = null;
+  await new SiigoClient({
+    baseUrl: process.env.SIIGO_API_URL ?? "https://api.siigo.com",
+    ...creds,
+    tokenStore: { get: async () => token, set: async (v) => void (token = v) },
+  }).testConnection();
+}
+
 export type Catalogs = {
   documentTypes: { id: number; name: string; code: string }[];
   taxes: SiigoTax[];

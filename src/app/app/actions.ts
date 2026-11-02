@@ -9,7 +9,7 @@ import { audit } from "@/lib/audit";
 import { parseFile } from "@/lib/batch/parse";
 import { buildInvoices, parseNumber, type RawRow, type RowError } from "@/lib/batch/build";
 import { DEFAULT_COMMISSION_CONFIG, expandCommissionRows, type CommissionModelConfig } from "@/lib/batch/commission";
-import { effectiveDefaults, getCatalogs, getSiigo, refreshCatalogs } from "@/lib/siigo";
+import { effectiveDefaults, getCatalogs, getSiigo, refreshCatalogs, testSiigoCredentials } from "@/lib/siigo";
 import { getSiigoDefaults, saveSiigoCredentials, setSetting, type SiigoDefaults } from "@/lib/settings";
 import { todayBogota } from "@/lib/format";
 
@@ -300,20 +300,29 @@ export async function saveSiigoConnection(_: ActionState, fd: FormData): Promise
   const partnerId = String(fd.get("partnerId") ?? "").trim();
   if (!username || !accessKey || !partnerId) return { error: "Complete usuario, access key y Partner-Id" };
   if (!/^[A-Za-z0-9]{3,100}$/.test(partnerId)) return { error: "El Partner-Id debe ser alfanumérico (3 a 100 caracteres)" };
+  // Primero se prueban: si fallan, se conservan las credenciales anteriores (la emisión sigue funcionando).
+  try {
+    await testSiigoCredentials({ username, accessKey, partnerId });
+  } catch (e) {
+    const msg = errMsg(e);
+    return {
+      error: /unauthorized|401|invalid/i.test(msg)
+        ? `Siigo rechazó el usuario o la access key (${msg}). No se guardó nada: siguen las credenciales anteriores. Revisa que el usuario sea el correo con el que generaste la credencial en Siigo (Configuración → Alianzas → Mi credencial API) y copia la access key completa, sin espacios.`
+        : `No se pudo conectar con Siigo: ${msg}. No se guardó nada: siguen las credenciales anteriores.`,
+    };
+  }
   try {
     await saveSiigoCredentials({ username, accessKey, partnerId });
   } catch (e) {
     return { error: `No se pudieron guardar las credenciales: ${errMsg(e)}` };
   }
   try {
-    const siigo = await getSiigo();
-    await siigo.testConnection();
     await refreshCatalogs();
     await audit(user, "siigo.credentials_saved", { username, partnerId });
     revalidatePath("/app/admin/siigo");
     return { ok: "Conexión exitosa. Catálogos actualizados." };
   } catch (e) {
-    return { error: `Credenciales guardadas, pero la conexión falló: ${errMsg(e)}` };
+    return { error: `Credenciales guardadas, pero no se pudieron actualizar los catálogos: ${errMsg(e)}` };
   }
 }
 
