@@ -124,6 +124,9 @@ export default async function MovimientosPage({
         <input name="max" defaultValue={max} inputMode="numeric" className="input max-w-[150px]" placeholder="Valor hasta" aria-label="Valor hasta" />
         <button className="btn-secondary">Filtrar</button>
         {(q || empresa || estado || min || max || orden) && <Link href="/app/movimientos" className="btn-secondary">Limpiar</Link>}
+        <a className="btn-primary" href={`/api/movimientos/excel?${new URLSearchParams({ q, empresa, estado, min, max, orden })}`} title="Excel con los movimientos de esta lista y el número de factura de cada uno">
+          Descargar Excel
+        </a>
         {(q || empresa || estado || min || max) && (
           <a
             className="btn-secondary"
