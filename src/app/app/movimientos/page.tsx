@@ -124,6 +124,15 @@ export default async function MovimientosPage({
         <input name="max" defaultValue={max} inputMode="numeric" className="input max-w-[150px]" placeholder="Valor hasta" aria-label="Valor hasta" />
         <button className="btn-secondary">Filtrar</button>
         {(q || empresa || estado || min || max || orden) && <Link href="/app/movimientos" className="btn-secondary">Limpiar</Link>}
+        {(q || empresa || estado || min || max) && (
+          <a
+            className="btn-secondary"
+            href={`/api/movimientos/soportes?${new URLSearchParams({ q, empresa, estado, min, max, orden })}`}
+            title="ZIP con el Excel de los movimientos filtrados y el PDF de cada factura (máximo 60)"
+          >
+            Descargar soportes (ZIP)
+          </a>
+        )}
       </form>
 
       <div className="card overflow-x-auto p-0">
@@ -157,7 +166,10 @@ export default async function MovimientosPage({
                     <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusStyle[m.status] ?? ""}`}>{m.status}</span>
                     {m.error && <div className="mt-1 max-w-xs text-xs text-red-600">{m.error}</div>}
                     {m.invoiceId && m.status === "facturado" && (
-                      <div><Link className="text-xs text-brand-700 hover:underline" href={href(page, { ver: String(m.id) })} scroll={false}>Ver factura</Link></div>
+                      <div className="flex gap-2 whitespace-nowrap">
+                        <Link className="text-xs text-brand-700 hover:underline" href={href(page, { ver: String(m.id) })} scroll={false}>Ver factura</Link>
+                        <a className="text-xs text-brand-700 hover:underline" href={`/api/movimientos/soportes?id=${m.id}`} title="Movimiento + factura (ZIP)">Descargar</a>
+                      </div>
                     )}
                   </td>
                   <td className="text-right">

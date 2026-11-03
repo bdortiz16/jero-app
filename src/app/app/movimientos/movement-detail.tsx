@@ -82,6 +82,7 @@ export async function MovementDetail({ id, role, inPanel = false }: { id: number
               <div className="flex flex-wrap gap-2">
                 <a className="btn-primary" href={`/api/facturas/${inv.id}/pdf`} target="_blank" rel="noopener">Ver factura (PDF)</a>
                 <a className="btn-secondary" href={`/api/facturas/${inv.id}/pdf?descargar=1`}>Descargar PDF</a>
+                <a className="btn-secondary" href={`/api/movimientos/soportes?id=${m.id}`}>Descargar movimiento + factura (ZIP)</a>
                 <Link className="btn-secondary" href={`/app/facturas/${inv.id}`}>Detalle en Jero</Link>
               </div>
               <dl className="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
