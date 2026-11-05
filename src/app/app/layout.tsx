@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { signOutAction } from "@/app/login/actions";
 import { requireUser } from "@/lib/session";
+import { withTimeout } from "@/lib/timeout";
 import { Nav } from "@/components/nav";
 import { Logo } from "@/components/ui";
 import { siigoMockEnabled } from "@/lib/siigo";
@@ -13,7 +14,11 @@ export const maxDuration = 60;
 const roleLabel = { ADMIN: "Administrador", CONTADOR: "Contador", USUARIO: "Consulta" } as const;
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
-  const user = await requireUser();
+  // Con límite y registro: si la sesión se traba, falla con nombre en vez de dejar la página
+  // cargando hasta el corte de Vercel (504 sin pistas).
+  const t0 = Date.now();
+  const user = await withTimeout(requireUser(), 15_000, "Menú: la sesión del usuario no respondió en 15 s");
+  console.log(`[layout] usuario listo en ${Date.now() - t0} ms`);
   const sections = [
     {
       items: [
