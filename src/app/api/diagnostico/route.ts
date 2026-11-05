@@ -24,6 +24,12 @@ export async function GET(req: Request) {
       return Response.json({ error: (e as Error).message }, { status: 500 });
     }
   }
+  // ?pagina=movimientos (con sesión iniciada): corre una por una las consultas de Movimientos y mide
+  // cada una, para encontrar la que hace que la página se quede cargando en producción.
+  if (new URL(req.url).searchParams.get("pagina") === "movimientos") {
+    if (!(await getAuthEmail().catch(() => null))) return Response.json({ error: "Inicia sesión en Jero primero" }, { status: 401 });
+    return Response.json(await movimientosPaso());
+  }
   const supa = supabaseConfig();
     const encKey = env.ENCRYPTION_KEY?.trim().length ?? 0;
   const checks: Record<string, string> = {
@@ -97,4 +103,35 @@ export async function GET(req: Request) {
   // Últimos errores del servidor (solo con sesión iniciada: pueden contener detalles internos).
   const errores = (await getAuthEmail().catch(() => null)) ? await recentServerErrors() : "inicia sesión para verlos";
   return Response.json({ ok, plataforma: { ...plataforma, region: env.VERCEL_REGION ?? "?" }, conexion: databaseSource(), tiempos, checks, base, errores }, { status: ok ? 200 : 500 });
+}
+
+async function movimientosPaso() {
+  const { getSiigoDefaults } = await import("@/lib/settings");
+  const { getCatalogs } = await import("@/lib/siigo");
+  const { activeModel } = await import("@/lib/movements-emit");
+  const { latestJob } = await import("@/lib/emission-jobs");
+  const { requireUser } = await import("@/lib/session");
+  const { schema } = await import("@/db");
+  const pasos: Record<string, string> = {};
+  const medir = async (nombre: string, fn: () => Promise<unknown>) => {
+    const t = performance.now();
+    try {
+      const r = await timeout(fn(), 15_000);
+      const tam = JSON.stringify(r ?? null)?.length ?? 0;
+      pasos[nombre] = `${Math.round(performance.now() - t)} ms · ${tam.toLocaleString("es-CO")} caracteres`;
+    } catch (e) {
+      pasos[nombre] = `ERROR tras ${Math.round(performance.now() - t)} ms: ${String((e as Error).message).slice(0, 200)}`;
+    }
+  };
+  const db = await getDb();
+  await medir("usuario", () => requireUser());
+  await medir("valores_siigo", () => getSiigoDefaults());
+  await medir("modelo_activo", () => activeModel());
+  await medir("catalogos", () => getCatalogs());
+  await medir("ultimo_trabajo", () => latestJob());
+  await medir("movimientos_pagina", () => db.select().from(schema.movements).limit(51));
+  await medir("empresas", () => db.selectDistinct({ company: schema.movements.company }).from(schema.movements));
+  await medir("totales", () => db.execute(sql`select status, count(*)::int as n from movements group by status`));
+  await medir("retiros", () => db.select({ n: sql<number>`count(*)::int` }).from(schema.withdrawals));
+  return { pasos };
 }
