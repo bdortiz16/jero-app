@@ -17,6 +17,7 @@ import { ImportMovementsForm } from "./import-form";
 import { ImportWithdrawalsForm } from "./withdrawals-form";
 import { BulkEmit } from "./bulk-emit";
 import { isStalled, latestJob } from "@/lib/emission-jobs";
+import { withTimeout } from "@/lib/timeout";
 import { ClickableRow, SidePanel } from "@/components/row-and-panel";
 import { MovementDetail } from "./movement-detail";
 
@@ -57,7 +58,8 @@ export default async function MovimientosPage({
     db.selectDistinct({ company: schema.movements.company }).from(schema.movements).orderBy(asc(schema.movements.company)),
     db.execute(sql`select status, count(*)::int as n, coalesce(sum(amount),0)::float8 as total from movements group by status`),
     // Si la tabla de retiros aún no existe (actualización de tablas pendiente), la página carga igual.
-    db.select({ n: sql<number>`count(*)::int` }).from(schema.withdrawals).catch(() => [{ n: 0 }]),
+    // Con tope de 3 s: si la tabla está bloqueada (p. ej. por una carga de retiros a medias), la página no se cuelga.
+    withTimeout(db.select({ n: sql<number>`count(*)::int` }).from(schema.withdrawals), 3_000, "retiros").catch(() => [{ n: 0 }]),
   ]);
   const withdrawalCount = Number(wCount[0]?.n ?? 0);
   const by = Object.fromEntries(rowsOf<{ status: string; n: number; total: number }>(totals).map((t) => [t.status, t]));
