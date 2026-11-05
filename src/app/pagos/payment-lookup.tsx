@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import { bankLabel } from "@/lib/withdrawals";
-import type { PaymentRow } from "@/lib/payments-lookup";
+import type { PaymentRow, PeriodRow } from "@/lib/payments-lookup";
 import { consultarPagos } from "./actions";
 
 const money = (n: number) => n.toLocaleString("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 2 });
@@ -39,6 +39,7 @@ export function PaymentLookup() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<PaymentRow[] | null>(null);
+  const [periods, setPeriods] = useState<PeriodRow[]>([]);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -48,10 +49,12 @@ export function PaymentLookup() {
     setBusy(false);
     if (!res.ok) {
       setRows(null);
+      setPeriods([]);
       setError(res.error);
       return;
     }
-    setRows(res.rows);
+    setRows(res.rows.length ? res.rows : null);
+    setPeriods(res.periods);
   }
 
   const total = rows?.reduce((s, r) => s + r.amount, 0) ?? 0;
@@ -75,6 +78,34 @@ export function PaymentLookup() {
       </form>
 
       {error && <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</div>}
+
+      {!rows && periods.length > 0 && (
+        <div className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-3">
+            <div className="card"><div className="text-sm text-slate-500">Beneficiario</div><div className="mt-1 font-semibold">{periods[0].beneficiary}</div><div className="text-xs text-slate-400">{periods[0].identification}</div></div>
+            <div className="card"><div className="text-sm text-slate-500">Pagos recibidos</div><div className="mt-1 text-2xl font-semibold tabular-nums">{periods.reduce((s, p) => s + (p.withdrawals ?? 0), 0).toLocaleString("es-CO")}</div></div>
+            <div className="card"><div className="text-sm text-slate-500">Total recibido</div><div className="mt-1 text-2xl font-semibold tabular-nums">{money(periods.reduce((s, p) => s + p.amount, 0))}</div></div>
+          </div>
+          <div className="card overflow-x-auto p-0">
+            <table className="table">
+              <thead><tr><th>Pagado por</th><th>Desde</th><th>Hasta</th><th className="text-right"># pagos</th><th className="text-right">Valor</th><th>Factura</th></tr></thead>
+              <tbody>
+                {periods.map((p, i) => (
+                  <tr key={i}>
+                    <td>{p.company}</td>
+                    <td className="whitespace-nowrap">{p.from ? new Date(p.from).toLocaleDateString("es-CO", { timeZone: "America/Bogota" }) : "—"}</td>
+                    <td className="whitespace-nowrap">{p.to ? new Date(p.to).toLocaleDateString("es-CO", { timeZone: "America/Bogota" }) : "—"}</td>
+                    <td className="text-right tabular-nums">{p.withdrawals ?? "—"}</td>
+                    <td className="whitespace-nowrap text-right tabular-nums">{money(p.amount)}</td>
+                    <td className="whitespace-nowrap">{p.invoice ?? <span className="text-slate-400">Por facturar</span>}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-xs text-slate-500">Resumen por periodo. El detalle pago por pago estará disponible pronto.</p>
+        </div>
+      )}
 
       {rows && (
         <div className="space-y-4">

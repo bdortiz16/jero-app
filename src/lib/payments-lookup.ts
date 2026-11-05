@@ -13,6 +13,18 @@ export type PaymentRow = {
   invoice: string | null;
 };
 
+/** Resumen por periodo (de los movimientos "Facturas por emitir"), cuando no hay detalle de retiros cargado. */
+export type PeriodRow = {
+  company: string;
+  beneficiary: string;
+  identification: string;
+  from: string | null;
+  to: string | null;
+  withdrawals: number | null;
+  amount: number;
+  invoice: string | null;
+};
+
 // Límites para que nadie recorra documentos al azar: por IP y por documento, en la última hora.
 const MAX_PER_IP = 20;
 const MAX_FAILED_PER_DOC = 5;
@@ -24,7 +36,7 @@ const day = (d: Date | null) => (d ? d.toLocaleDateString("en-CA", { timeZone: "
  * tienen otro dato a mano). Para que nadie recorra documentos al azar hay límite de consultas por
  * IP, y de la cuenta destino no se muestra ningún dígito, solo el banco.
  */
-export async function lookupPayments(doc: string, ip: string): Promise<{ ok: true; rows: PaymentRow[] } | { ok: false; error: string }> {
+export async function lookupPayments(doc: string, ip: string): Promise<{ ok: true; rows: PaymentRow[]; periods: PeriodRow[] } | { ok: false; error: string }> {
   const keys = lookupKeys(doc);
   if (!keys.length) return { ok: false, error: "Escribe tu cédula o NIT (solo números)." };
 
@@ -43,9 +55,35 @@ export async function lookupPayments(doc: string, ip: string): Promise<{ ok: tru
   }
 
   const all = await db.select().from(schema.withdrawals).where(inArray(schema.withdrawals.idKey, keys)).orderBy(schema.withdrawals.paidAt);
-  const ok = all.length > 0;
+  // Sin el detalle de retiros cargado (o sin retiros de ese documento), se muestra al menos lo que
+  // hay en Movimientos: cada periodo con su número de retiros, el valor y la factura.
+  const periods = all.length
+    ? []
+    : await db
+        .select({ m: schema.movements, number: schema.invoices.siigoNumber })
+        .from(schema.movements)
+        .leftJoin(schema.invoices, eq(schema.invoices.id, schema.movements.invoiceId))
+        .where(inArray(schema.movements.identification, keys))
+        .orderBy(schema.movements.dateFrom);
+  const ok = all.length > 0 || periods.length > 0;
   await db.insert(schema.paymentLookups).values({ ip, idKey: keys[keys.length - 1], ok });
   if (!ok) return { ok: false, error: "No encontramos pagos con ese documento. Revisa el número." };
+  if (!all.length) {
+    return {
+      ok: true,
+      rows: [],
+      periods: periods.map(({ m, number }) => ({
+        company: m.company,
+        beneficiary: m.customerName,
+        identification: m.identificationRaw,
+        from: m.dateFrom?.toISOString() ?? null,
+        to: m.dateTo?.toISOString() ?? null,
+        withdrawals: m.withdrawals,
+        amount: Number(m.amount),
+        invoice: number ?? null,
+      })),
+    };
+  }
 
   // Número de factura: el del archivo de cruce o, si no, el de la factura emitida desde Jero
   // para el movimiento que cubre la fecha del retiro.
@@ -61,6 +99,7 @@ export async function lookupPayments(doc: string, ip: string): Promise<{ ok: tru
 
   return {
     ok: true,
+    periods: [],
     rows: all.map((w) => ({
       paidAt: w.paidAt.toISOString(),
       company: w.company,
