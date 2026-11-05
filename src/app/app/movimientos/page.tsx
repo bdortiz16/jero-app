@@ -16,6 +16,7 @@ import { emitMovementAction } from "../actions";
 import { ImportMovementsForm } from "./import-form";
 import { BulkEmit } from "./bulk-emit";
 import { isStalled, latestJob } from "@/lib/emission-jobs";
+import { withTimeout } from "@/lib/timeout";
 import { ClickableRow, SidePanel } from "@/components/row-and-panel";
 import { MovementDetail } from "./movement-detail";
 
@@ -37,11 +38,20 @@ export default async function MovimientosPage({
 }: {
   searchParams: Promise<{ q?: string; empresa?: string; estado?: string; p?: string; min?: string; max?: string; orden?: string; ver?: string }>;
 }) {
-  const user = await requireUser();
+  // Cada paso con límite y nombre: en producción esta página se quedaba cargando hasta que Vercel la
+  // cortaba (60 s) sin decir dónde. Así, si algo se traba, el error dice qué paso fue.
+  const t0 = Date.now();
+  const paso = <T,>(nombre: string, p: Promise<T>) => withTimeout(p, 15_000, `Movimientos: el paso "${nombre}" no respondió en 15 s`);
+  const user = await paso("usuario", requireUser());
   const { q = "", empresa = "", estado = "", p = "1", min = "", max = "", orden = "", ver = "" } = await searchParams;
   const page = Math.max(1, Number(p) || 1);
-  const db = await getDb();
-  const [defaults, model, catalogs, job] = await Promise.all([getSiigoDefaults(), activeModel(), getCatalogs(), latestJob()]);
+  const db = await paso("conexión", getDb());
+  const [defaults, model, catalogs, job] = await Promise.all([
+    paso("valores Siigo", getSiigoDefaults()),
+    paso("modelo activo", activeModel()),
+    paso("catálogos", getCatalogs()),
+    paso("último trabajo", latestJob()),
+  ]);
   // Se muestra la emisión en curso, o la última si terminó hace menos de 12 horas.
   const showJob = job && (job.status === "running" || Date.now() - new Date(job.finishedAt ?? job.createdAt).getTime() < 12 * 3600_000);
   const jobView = showJob ? (({ itemIds: _i, ...rest }) => ({ ...rest, stalled: isStalled(job) }))(job) : null;
@@ -52,10 +62,12 @@ export default async function MovimientosPage({
   const where = movementWhere({ q, empresa, estado, min, max });
   const cond = where.length ? and(...where) : undefined;
   const [rows, companies, totals] = await Promise.all([
-    db.select().from(schema.movements).where(cond).orderBy(...movementOrder(orden)).limit(PAGE + 1).offset((page - 1) * PAGE),
-    db.selectDistinct({ company: schema.movements.company }).from(schema.movements).orderBy(asc(schema.movements.company)),
-    db.execute(sql`select status, count(*)::int as n, coalesce(sum(amount),0)::float8 as total from movements group by status`),
+    paso("movimientos", db.select().from(schema.movements).where(cond).orderBy(...movementOrder(orden)).limit(PAGE + 1).offset((page - 1) * PAGE)),
+    paso("empresas", db.selectDistinct({ company: schema.movements.company }).from(schema.movements).orderBy(asc(schema.movements.company))),
+    paso("totales", db.execute(sql`select status, count(*)::int as n, coalesce(sum(amount),0)::float8 as total from movements group by status`)),
   ]);
+  // Aparece en Vercel → Logs: si se ve esta línea y aun así la página se corta, el problema no son los datos.
+  console.log(`[movimientos] datos listos en ${Date.now() - t0} ms (${rows.length} filas, trabajo ${job?.id ?? "-"} ${job?.status ?? ""})`);
   const by = Object.fromEntries(rowsOf<{ status: string; n: number; total: number }>(totals).map((t) => [t.status, t]));
   const href = (n: number, extra: Record<string, string> = {}) =>
     `/app/movimientos?${new URLSearchParams({ q, empresa, estado, min, max, orden, p: String(n), ...extra })}`;
