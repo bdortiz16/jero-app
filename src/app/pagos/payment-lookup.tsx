@@ -235,7 +235,7 @@ export function PaymentLookup() {
               <p className="px-5 py-3 text-xs text-slate-500">Resumen por periodo. El detalle pago por pago estará disponible pronto.</p>
             </div>
           )}
-          <p className="text-xs text-slate-500">Valor = lo que llegó a tu cuenta. Si un pago se facturó en dos partes, aparece en las dos facturas con el valor de cada parte.</p>
+          <p className="text-xs text-slate-500">"Pagado por" es la empresa que hizo el pago; en tu banco llega a nombre de Soluciones y Pagos o RICE, procesadoras de pagos aliadas de JERO. Valor = lo que llegó a tu cuenta. Si un pago se facturó en dos partes, aparece en las dos facturas con el valor de cada parte.</p>
         </div>
       )}
     </div>

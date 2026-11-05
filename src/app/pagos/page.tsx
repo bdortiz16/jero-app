@@ -19,6 +19,15 @@ export default function PagosPage() {
           Escribe tu cédula o NIT y verás, uno por uno, los pagos que te hicimos: fecha, valor, banco y la factura en la que
           quedaron incluidos.
         </p>
+        {/* En el extracto del banco el pago no dice JERO sino el nombre de la procesadora: sin este aviso
+            los clientes no reconocen sus pagos. */}
+        <div className="mt-6 flex gap-3 rounded-xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900">
+          <span aria-hidden className="text-lg leading-5">ℹ️</span>
+          <p>
+            <b>¿Cómo aparecen los pagos en tu banco?</b> Te llegan desde <b>Soluciones y Pagos</b> o <b>RICE</b>, procesadoras de
+            pagos aliadas de JERO. Si en tu extracto ves alguno de esos nombres, es un pago nuestro.
+          </p>
+        </div>
         <PaymentLookup />
       </main>
     </div>
