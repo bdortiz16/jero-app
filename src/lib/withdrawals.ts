@@ -1,5 +1,5 @@
 import { normalizeHeader } from "./batch/build";
-import { parseIdentification } from "./movements";
+import { nitCheckDigit, parseIdentification } from "./movements";
 
 /** Retiro tal como se manda al servidor al importar (fechas en ISO). */
 export type WithdrawalDTO = {
@@ -114,16 +114,35 @@ export function parseWithdrawalSheets(sheets: Sheet[]): { rows: WithdrawalDTO[];
   return { rows, skipped, sheets: used };
 }
 
+/** Documento escrito por el cliente, ya limpio. */
+export type DocInput = {
+  /** Todos los dígitos tal cual (sin puntos, espacios ni guion). */
+  full: string;
+  /** El NIT sin el dígito de verificación, si el número lo trae. */
+  base: string | null;
+  /** El cliente escribió el guion (900123456-7): es un NIT seguro. */
+  explicitNit: boolean;
+};
+
 /**
- * Posibles claves para el documento que escribe el cliente: tal cual (solo dígitos) y, si parece
- * un NIT con el dígito de verificación pegado (10 dígitos que empiezan por 8 o 9), sin él.
+ * Interpreta el documento como lo escriba el cliente: "1.005.237.062", "900 123 456", "900123456-7",
+ * "NIT 900.123.456-7" o "9001234567". Si trae dígito de verificación (con guion, o 10 dígitos que
+ * empiezan por 8 o 9 y cuyo último dígito es un DV válido), también se busca sin él.
  */
+export function parseDocInput(input: string): DocInput | null {
+  const clean = input.replace(/[^\d-]/g, "").replace(/^0+/, "");
+  const withDash = clean.match(/^(\d{5,14})-+(\d)$/);
+  if (withDash) return { full: withDash[1] + withDash[2], base: withDash[1], explicitNit: true };
+  const d = clean.replace(/\D/g, "");
+  if (d.length < 5 || d.length > 15) return null;
+  const base = d.length >= 9 && /^[89]/.test(d) && nitCheckDigit(d.slice(0, -1)) === Number(d.slice(-1)) ? d.slice(0, -1) : null;
+  return { full: d, base, explicitNit: false };
+}
+
+/** Compatibilidad: las claves a buscar (con y sin dígito de verificación). */
 export function lookupKeys(input: string): string[] {
-  const d = input.replace(/\D/g, "");
-  if (d.length < 5 || d.length > 15) return [];
-  const keys = [d];
-  if (d.length === 10 && /^[89]/.test(d)) keys.push(d.slice(0, 9));
-  return keys;
+  const p = parseDocInput(input);
+  return p ? [p.full, ...(p.base ? [p.base] : [])] : [];
 }
 
 /** Nombre del banco legible: "banco_de_bogota" → "Banco De Bogota". */

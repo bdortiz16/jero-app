@@ -1,7 +1,8 @@
 import "server-only";
-import { and, eq, gte, inArray, sql } from "drizzle-orm";
+import { and, eq, gte, inArray, or, sql, type SQL } from "drizzle-orm";
+import type { AnyColumn } from "drizzle-orm";
 import { getDb, schema } from "@/db";
-import { lookupKeys } from "./withdrawals";
+import { lookupKeys, parseDocInput, type DocInput } from "./withdrawals";
 
 /** Un pago (o la parte de un pago) dentro de una factura. */
 export type PaymentRow = {
@@ -41,8 +42,25 @@ export type PeriodRow = {
   invoiceId: number | null;
 };
 
+const digitsOf = (col: AnyColumn) => sql`regexp_replace(coalesce(${col}, ''), '[^0-9]', '', 'g')`;
+
+/**
+ * El documento escrito coincide con el guardado aunque uno traiga el dígito de verificación y el otro
+ * no, o tenga puntos o guion. Quitarle el DV a lo que escribió el cliente solo vale para empresas (o
+ * si escribió el guion): así una cédula de 10 dígitos no trae los pagos de otro documento de 9.
+ */
+function docMatches(p: DocInput, key: AnyColumn, raw: AnyColumn, isCompany: SQL): SQL {
+  return or(
+    eq(key, p.full),
+    sql`${digitsOf(raw)} = ${p.full}`,
+    // Guardado con DV pegado y el cliente lo escribió sin DV.
+    and(sql`${digitsOf(raw)} like ${p.full + "_"}`, isCompany),
+    ...(p.base ? [and(eq(key, p.base), p.explicitNit ? sql`true` : isCompany)] : []),
+  )!;
+}
+
 // Límites para que nadie recorra documentos al azar: por IP y por documento, en la última hora.
-const MAX_PER_IP = 20;
+const MAX_PER_IP = 30;
 const MAX_FAILED_PER_DOC = 5;
 
 const day = (d: Date | null) => (d ? d.toLocaleDateString("en-CA", { timeZone: "America/Bogota" }) : null);
@@ -56,8 +74,9 @@ export async function lookupPayments(doc: string, ip: string): Promise<
   | { ok: true; beneficiary: string; identification: string; count: number; total: number; groups: InvoiceGroup[]; periods: PeriodRow[] }
   | { ok: false; error: string }
 > {
-  const keys = lookupKeys(doc);
-  if (!keys.length) return { ok: false, error: "Escribe tu cédula o NIT (solo números)." };
+  const parsed = parseDocInput(doc);
+  if (!parsed) return { ok: false, error: "Escribe tu cédula o NIT (de 5 a 15 números)." };
+  const keys = [parsed.full, ...(parsed.base ? [parsed.base] : [])];
 
   const db = await getDb();
   const hourAgo = new Date(Date.now() - 3600_000);
@@ -73,7 +92,14 @@ export async function lookupPayments(doc: string, ip: string): Promise<
     return { ok: false, error: "Demasiados intentos. Espera una hora y vuelve a intentarlo." };
   }
 
-  const all = await db.select().from(schema.withdrawals).where(inArray(schema.withdrawals.idKey, keys)).orderBy(schema.withdrawals.paidAt);
+  const W = schema.withdrawals;
+  const all = await db
+    .select()
+    .from(W)
+    .where(docMatches(parsed, W.idKey, W.identificationRaw, sql`(${W.idType} ilike '%nit%' or length(${digitsOf(W.identificationRaw)}) > length(${W.idKey}))`))
+    .orderBy(W.paidAt);
+  const M = schema.movements;
+  const movementMatch = docMatches(parsed, M.identification, M.identificationRaw, sql`${M.personType} = 'Company'`);
   // Sin el detalle de retiros cargado (o sin retiros de ese documento), se muestra al menos lo que
   // hay en Movimientos: cada periodo con su número de retiros, el valor y la factura.
   const periods = all.length
@@ -82,11 +108,16 @@ export async function lookupPayments(doc: string, ip: string): Promise<
         .select({ m: schema.movements, number: schema.invoices.siigoNumber, invoiceId: schema.invoices.id, invStatus: schema.invoices.status })
         .from(schema.movements)
         .leftJoin(schema.invoices, eq(schema.invoices.id, schema.movements.invoiceId))
-        .where(inArray(schema.movements.identification, keys))
+        .where(movementMatch)
         .orderBy(schema.movements.dateFrom);
   const ok = all.length > 0 || periods.length > 0;
-  await db.insert(schema.paymentLookups).values({ ip, idKey: keys[keys.length - 1], ok });
-  if (!ok) return { ok: false, error: "No encontramos pagos con ese documento. Revisa el número." };
+  await db.insert(schema.paymentLookups).values({ ip, idKey: parsed.base ?? parsed.full, ok });
+  if (!ok) {
+    return {
+      ok: false,
+      error: "No encontramos pagos con ese documento. Revisa el número: escribe la cédula o el NIT tal como aparece en tu documento (con o sin puntos, guion y dígito de verificación).",
+    };
+  }
   if (!all.length) {
     return {
       ok: true,
@@ -123,7 +154,7 @@ export async function lookupPayments(doc: string, ip: string): Promise<
     })
     .from(schema.movements)
     .innerJoin(schema.invoices, eq(schema.invoices.id, schema.movements.invoiceId))
-    .where(and(inArray(schema.movements.identification, keys), eq(schema.invoices.status, "sent")));
+    .where(and(movementMatch, eq(schema.invoices.status, "sent")));
   const jeroInvoiceFor = (company: string, paidAt: Date) => {
     const d = day(paidAt)!;
     return movs.find((m) => m.company.toUpperCase() === company && day(m.from)! <= d && d <= day(m.to)!) ?? null;

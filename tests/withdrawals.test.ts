@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { lookupKeys, parseWithdrawalSheets } from "@/lib/withdrawals";
+import { lookupKeys, parseDocInput, parseWithdrawalSheets } from "@/lib/withdrawals";
 
 describe("retiros", () => {
   const header = ["Fecha retiro", "Mes", "Beneficiario", "Tipo ID", "Identificación", "Banco destino", "Cuenta destino", "Importe", "Importe neto", "Estado", "Factura(s) FV", "Valor facturado asignado", "Pendiente por facturar", "Cómo se cruzó", "Observación", "Clave tercero"];
@@ -26,5 +26,19 @@ describe("retiros", () => {
     expect(lookupKeys("900.123.456-1")).toEqual(["9001234561", "900123456"]);
     expect(lookupKeys("12345678")).toEqual(["12345678"]);
     expect(lookupKeys("12")).toEqual([]);
+  });
+
+  it("entiende el documento como lo escriba el cliente", () => {
+    expect(parseDocInput("1.005.237.062")).toEqual({ full: "1005237062", base: null, explicitNit: false });
+    expect(parseDocInput(" 10 052 370 62 ")).toEqual({ full: "1005237062", base: null, explicitNit: false });
+    // NIT con DV pegado (válido) o separado por guion, con o sin puntos y texto
+    expect(parseDocInput("9019703613")).toEqual({ full: "9019703613", base: "901970361", explicitNit: false });
+    expect(parseDocInput("NIT 901.970.361-3")).toEqual({ full: "9019703613", base: "901970361", explicitNit: true });
+    expect(parseDocInput("901970361 - 3")).toEqual({ full: "9019703613", base: "901970361", explicitNit: true });
+    // Un DV equivocado con guion igual se busca por el NIT
+    expect(parseDocInput("901970361-5")?.base).toBe("901970361");
+    // 10 dígitos cuyo último no es un DV válido: no se recorta (podría ser una cédula)
+    expect(parseDocInput("9019703619")?.base).toBeNull();
+    expect(parseDocInput("abc")).toBeNull();
   });
 });
