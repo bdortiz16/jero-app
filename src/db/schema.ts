@@ -224,6 +224,51 @@ export const emissionJobs = pgTable("emission_jobs", {
   finishedAt: timestamp("finished_at", { withTimezone: true }),
 });
 
+/**
+ * Retiros (pagos) hechos a cada beneficiario, uno por uno, del archivo de cruce de retiros.
+ * Sirven para que el cliente consulte en la página pública qué pagos recibió. De la cuenta
+ * destino solo se guardan los últimos 4 dígitos: es el dato con que el cliente se verifica.
+ */
+export const withdrawals = pgTable(
+  "withdrawals",
+  {
+    id: serial("id").primaryKey(),
+    company: text("company").notNull(),
+    paidAt: timestamp("paid_at", { withTimezone: true }).notNull(),
+    beneficiary: text("beneficiary").notNull(),
+    idType: text("id_type"),
+    identificationRaw: text("identification_raw").notNull(),
+    // Identificación sin DV (la "clave del tercero"), para buscar
+    idKey: text("id_key").notNull(),
+    bank: text("bank"),
+    accountLast4: text("account_last4"),
+    amount: numeric("amount", { precision: 18, scale: 2 }).notNull(),
+    netAmount: numeric("net_amount", { precision: 18, scale: 2 }).notNull(),
+    status: text("status"),
+    invoiceRef: text("invoice_ref"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("withdrawals_unique").on(t.company, t.paidAt, t.idKey, t.netAmount),
+    index("withdrawals_id_key").on(t.idKey),
+  ],
+);
+
+/** Intentos de la consulta pública de pagos (para frenar a quien prueba documentos al azar). */
+export const paymentLookups = pgTable(
+  "payment_lookups",
+  {
+    id: serial("id").primaryKey(),
+    ip: text("ip").notNull(),
+    idKey: text("id_key").notNull(),
+    ok: boolean("ok").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index("payment_lookups_ip").on(t.ip, t.createdAt), index("payment_lookups_key").on(t.idKey, t.createdAt)],
+);
+
+export type Withdrawal = typeof withdrawals.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type EmissionJob = typeof emissionJobs.$inferSelect;
 export type Movement = typeof movements.$inferSelect;

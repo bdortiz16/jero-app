@@ -14,6 +14,7 @@ import { ActionButton } from "@/components/forms";
 import { SummaryTable } from "@/components/modal";
 import { emitMovementAction } from "../actions";
 import { ImportMovementsForm } from "./import-form";
+import { ImportWithdrawalsForm } from "./withdrawals-form";
 import { BulkEmit } from "./bulk-emit";
 import { isStalled, latestJob } from "@/lib/emission-jobs";
 import { ClickableRow, SidePanel } from "@/components/row-and-panel";
@@ -51,11 +52,13 @@ export default async function MovimientosPage({
 
   const where = movementWhere({ q, empresa, estado, min, max });
   const cond = where.length ? and(...where) : undefined;
-  const [rows, companies, totals] = await Promise.all([
+  const [rows, companies, totals, wCount] = await Promise.all([
     db.select().from(schema.movements).where(cond).orderBy(...movementOrder(orden)).limit(PAGE + 1).offset((page - 1) * PAGE),
     db.selectDistinct({ company: schema.movements.company }).from(schema.movements).orderBy(asc(schema.movements.company)),
     db.execute(sql`select status, count(*)::int as n, coalesce(sum(amount),0)::float8 as total from movements group by status`),
+    db.select({ n: sql<number>`count(*)::int` }).from(schema.withdrawals),
   ]);
+  const withdrawalCount = Number(wCount[0]?.n ?? 0);
   const by = Object.fromEntries(rowsOf<{ status: string; n: number; total: number }>(totals).map((t) => [t.status, t]));
   const href = (n: number, extra: Record<string, string> = {}) =>
     `/app/movimientos?${new URLSearchParams({ q, empresa, estado, min, max, orden, p: String(n), ...extra })}`;
@@ -99,6 +102,26 @@ export default async function MovimientosPage({
             Si vuelves a subir el mismo archivo, los movimientos repetidos se ignoran.
           </p>
         </div>
+      )}
+
+      {canEmit && (
+        <details className="card mb-6">
+          <summary className="cursor-pointer font-semibold">
+            Detalle de pagos para la consulta de clientes{" "}
+            <span className="text-sm font-normal text-slate-500">
+              · {withdrawalCount.toLocaleString("es-CO")} retiros cargados ·{" "}
+              <Link href="/pagos" target="_blank" className="text-brand-700 hover:underline">ver la página pública</Link>
+            </span>
+          </summary>
+          <div className="mt-4">
+            <ImportWithdrawalsForm />
+            <p className="mt-2 text-xs text-slate-500">
+              Sube el archivo de cruce de retiros (hojas JERO y KAUPALOKI, con Fecha retiro, Beneficiario, Identificación, Banco y
+              Cuenta destino, Importe neto, Estado y Factura). Los clientes consultan sus pagos en la página de inicio con su
+              documento y los últimos 4 dígitos de su cuenta. Volver a subirlo actualiza el estado y la factura de cada retiro.
+            </p>
+          </div>
+        </details>
       )}
 
       {canEmit && model && <BulkEmit filters={{ q, empresa, min, max, orden }} initialJob={jobView} />}

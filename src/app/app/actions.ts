@@ -670,3 +670,41 @@ export async function resumeEmissionJob(jobId: number): Promise<ActionState> {
   await kickJob(jobId, await requestOrigin());
   return { ok: "Reanudada" };
 }
+
+/** Carga un bloque de retiros (detalle de pagos) del archivo de cruce. Si ya existe, actualiza su estado y factura. */
+export async function importWithdrawalsChunk(input: { fileName: string; first: boolean; total: number; rows: import("@/lib/withdrawals").WithdrawalDTO[] }): Promise<{ saved?: number; error?: string }> {
+  const user = await requireEditor();
+  if (!Array.isArray(input.rows) || input.rows.length > 1000) return { error: "Bloque inválido" };
+  try {
+    const db = await getDb();
+    if (input.first) await audit(user, "withdrawals.import", { file: input.fileName, rows: input.total });
+    if (!input.rows.length) return { saved: 0 };
+    const values = input.rows.map((r) => ({
+      ...r,
+      paidAt: new Date(r.paidAt),
+      amount: Number(r.amount).toFixed(2),
+      netAmount: Number(r.netAmount).toFixed(2),
+      accountLast4: r.accountLast4 && /^\d{4}$/.test(r.accountLast4) ? r.accountLast4 : null,
+    }));
+    const t = schema.withdrawals;
+    const saved = await db
+      .insert(t)
+      .values(values)
+      .onConflictDoUpdate({
+        target: [t.company, t.paidAt, t.idKey, t.netAmount],
+        set: {
+          beneficiary: sql`excluded.beneficiary`,
+          bank: sql`excluded.bank`,
+          accountLast4: sql`excluded.account_last4`,
+          status: sql`excluded.status`,
+          invoiceRef: sql`excluded.invoice_ref`,
+          updatedAt: sql`now()`,
+        },
+      })
+      .returning({ id: t.id });
+    revalidatePath("/app/movimientos");
+    return { saved: saved.length };
+  } catch (e) {
+    return { error: errMsg(e) };
+  }
+}

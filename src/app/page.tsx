@@ -20,6 +20,7 @@ export default async function Home() {
         <nav className="flex items-center gap-3">
           <a href="#funciones" className="hidden text-sm text-slate-600 hover:text-slate-900 sm:block">Funciones</a>
           <a href="#como" className="hidden text-sm text-slate-600 hover:text-slate-900 sm:block">Cómo funciona</a>
+          <Link href="/pagos" className="btn-secondary">Consulta tus pagos</Link>
           {email ? (
             <Link href="/app" className="btn-primary">Ir a la app</Link>
           ) : (
@@ -40,6 +41,17 @@ export default async function Home() {
         <div className="mt-10 flex justify-center gap-3">
           <Link href="/login" className="btn-primary px-6 py-3 text-base">Empezar ahora</Link>
           <a href="#como" className="btn-secondary px-6 py-3 text-base">Ver cómo funciona</a>
+        </div>
+      </section>
+
+      {/* Los clientes ven un solo valor en su factura y no saben a qué pagos corresponde: aquí lo consultan. */}
+      <section className="mx-auto mb-16 max-w-4xl px-6">
+        <div className="card flex flex-col items-center justify-between gap-4 border-brand-200 bg-brand-50 text-center sm:flex-row sm:text-left">
+          <div>
+            <h2 className="text-lg font-semibold text-brand-900">¿Recibiste pagos de JERO o KAUPALOKI?</h2>
+            <p className="mt-1 text-sm text-brand-800">Consulta el detalle de cada pago (fecha, valor y factura) con tu cédula o NIT.</p>
+          </div>
+          <Link href="/pagos" className="btn-primary shrink-0 px-6 py-3 text-base">Consulta tus pagos</Link>
         </div>
       </section>
 
