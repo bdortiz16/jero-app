@@ -118,7 +118,7 @@ export default async function MovimientosPage({
             <p className="mt-2 text-xs text-slate-500">
               Sube el archivo de cruce de retiros (hojas JERO y KAUPALOKI, con Fecha retiro, Beneficiario, Identificación, Banco y
               Cuenta destino, Importe neto, Estado y Factura). Los clientes consultan sus pagos en la página de inicio con su
-              documento y los últimos 4 dígitos de su cuenta. Volver a subirlo actualiza el estado y la factura de cada retiro.
+              cédula o NIT. Volver a subirlo actualiza el estado y la factura de cada retiro.
             </p>
           </div>
         </details>

@@ -20,9 +20,9 @@ const cell = (v: unknown) => {
 };
 
 function downloadCsv(rows: PaymentRow[], doc: string) {
-  const header = ["Fecha", "Pagado por", "Beneficiario", "Identificación", "Banco", "Cuenta", "Valor", "Factura"];
+  const header = ["Fecha", "Pagado por", "Beneficiario", "Identificación", "Banco", "Valor", "Factura"];
   const lines = rows.map((r) =>
-    [when(r.paidAt), r.company, r.beneficiary, r.identification, bankLabel(r.bank), r.accountLast4 ? `****${r.accountLast4}` : "", r.amount.toFixed(2).replace(".", ","), r.invoice ?? ""]
+    [when(r.paidAt), r.company, r.beneficiary, r.identification, bankLabel(r.bank), r.amount.toFixed(2).replace(".", ","), r.invoice ?? ""]
       .map(cell)
       .join(";"),
   );
@@ -36,7 +36,6 @@ function downloadCsv(rows: PaymentRow[], doc: string) {
 
 export function PaymentLookup() {
   const [doc, setDoc] = useState("");
-  const [last4, setLast4] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<PaymentRow[] | null>(null);
@@ -45,7 +44,7 @@ export function PaymentLookup() {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const res = await consultarPagos(doc, last4);
+    const res = await consultarPagos(doc);
     setBusy(false);
     if (!res.ok) {
       setRows(null);
@@ -67,19 +66,12 @@ export function PaymentLookup() {
 
   return (
     <div className="mt-8 space-y-6">
-      <form onSubmit={submit} className="card grid gap-4 sm:grid-cols-[1fr_220px_auto] sm:items-end">
+      <form onSubmit={submit} className="card grid gap-4 sm:grid-cols-[1fr_auto] sm:items-end">
         <div>
           <label className="label" htmlFor="doc">Cédula o NIT</label>
           <input id="doc" value={doc} onChange={(e) => setDoc(e.target.value)} inputMode="numeric" autoComplete="off" required className="input" placeholder="Ej. 1012345678 o 900123456" />
         </div>
-        <div>
-          <label className="label" htmlFor="last4">Últimos 4 dígitos de tu cuenta</label>
-          <input id="last4" value={last4} onChange={(e) => setLast4(e.target.value.replace(/\D/g, "").slice(0, 4))} inputMode="numeric" autoComplete="off" required className="input" placeholder="Ej. 1234" />
-        </div>
         <button className="btn-primary h-[42px]" disabled={busy}>{busy ? "Consultando…" : "Consultar pagos"}</button>
-        <p className="text-xs text-slate-500 sm:col-span-3">
-          Los últimos 4 dígitos de la cuenta bancaria donde recibes los pagos protegen tu información: sin ellos nadie más puede ver tus pagos.
-        </p>
       </form>
 
       {error && <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">{error}</div>}
@@ -96,11 +88,11 @@ export function PaymentLookup() {
           </div>
           <div className="card overflow-x-auto p-0">
             <table className="table">
-              <thead><tr><th>Fecha y hora</th><th>Pagado por</th><th>Banco</th><th>Cuenta</th><th className="text-right">Valor</th><th>Factura</th></tr></thead>
+              <thead><tr><th>Fecha y hora</th><th>Pagado por</th><th>Banco</th><th className="text-right">Valor</th><th>Factura</th></tr></thead>
               {months.map((m) => (
                 <tbody key={m.month}>
                   <tr className="bg-slate-50">
-                    <td colSpan={4} className="font-semibold">{m.month} · {m.rows.length} {m.rows.length === 1 ? "pago" : "pagos"}</td>
+                    <td colSpan={3} className="font-semibold">{m.month} · {m.rows.length} {m.rows.length === 1 ? "pago" : "pagos"}</td>
                     <td className="text-right font-semibold tabular-nums">{money(m.rows.reduce((s, r) => s + r.amount, 0))}</td>
                     <td></td>
                   </tr>
@@ -109,7 +101,6 @@ export function PaymentLookup() {
                       <td className="whitespace-nowrap">{when(r.paidAt)}</td>
                       <td>{r.company}</td>
                       <td>{bankLabel(r.bank)}</td>
-                      <td className="font-mono text-xs">{r.accountLast4 ? `****${r.accountLast4}` : "—"}</td>
                       <td className="whitespace-nowrap text-right tabular-nums">{money(r.amount)}</td>
                       <td className="whitespace-nowrap">{r.invoice ?? <span className="text-slate-400">Por facturar</span>}</td>
                     </tr>

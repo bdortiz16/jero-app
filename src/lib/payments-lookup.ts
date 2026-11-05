@@ -9,7 +9,6 @@ export type PaymentRow = {
   beneficiary: string;
   identification: string;
   bank: string | null;
-  accountLast4: string | null;
   amount: number;
   invoice: string | null;
 };
@@ -21,16 +20,13 @@ const MAX_FAILED_PER_DOC = 5;
 const day = (d: Date | null) => (d ? d.toLocaleDateString("en-CA", { timeZone: "America/Bogota" }) : null);
 
 /**
- * Consulta pública de pagos. Pide el documento y los últimos 4 dígitos de la cuenta donde el
- * cliente recibió el dinero: con solo el documento cualquiera vería los pagos de otra persona.
- * La respuesta es la misma si el documento no existe o si los dígitos no coinciden (no revela
- * quién es cliente).
+ * Consulta pública de pagos con solo la cédula o el NIT (decisión del negocio: los clientes no
+ * tienen otro dato a mano). Para que nadie recorra documentos al azar hay límite de consultas por
+ * IP, y de la cuenta destino no se muestra ningún dígito, solo el banco.
  */
-export async function lookupPayments(doc: string, last4: string, ip: string): Promise<{ ok: true; rows: PaymentRow[] } | { ok: false; error: string }> {
+export async function lookupPayments(doc: string, ip: string): Promise<{ ok: true; rows: PaymentRow[] } | { ok: false; error: string }> {
   const keys = lookupKeys(doc);
-  const digits = last4.replace(/\D/g, "");
   if (!keys.length) return { ok: false, error: "Escribe tu cédula o NIT (solo números)." };
-  if (digits.length !== 4) return { ok: false, error: "Escribe los últimos 4 dígitos de la cuenta donde recibes los pagos." };
 
   const db = await getDb();
   const hourAgo = new Date(Date.now() - 3600_000);
@@ -47,9 +43,9 @@ export async function lookupPayments(doc: string, last4: string, ip: string): Pr
   }
 
   const all = await db.select().from(schema.withdrawals).where(inArray(schema.withdrawals.idKey, keys)).orderBy(schema.withdrawals.paidAt);
-  const ok = all.some((w) => w.accountLast4 === digits);
+  const ok = all.length > 0;
   await db.insert(schema.paymentLookups).values({ ip, idKey: keys[keys.length - 1], ok });
-  if (!ok) return { ok: false, error: "No encontramos pagos con ese documento y esa cuenta. Revisa los datos." };
+  if (!ok) return { ok: false, error: "No encontramos pagos con ese documento. Revisa el número." };
 
   // Número de factura: el del archivo de cruce o, si no, el de la factura emitida desde Jero
   // para el movimiento que cubre la fecha del retiro.
@@ -71,7 +67,6 @@ export async function lookupPayments(doc: string, last4: string, ip: string): Pr
       beneficiary: w.beneficiary,
       identification: w.identificationRaw,
       bank: w.bank,
-      accountLast4: w.accountLast4,
       amount: Number(w.netAmount),
       invoice: w.invoiceRef || invoiceFor(w.company, w.paidAt),
     })),
