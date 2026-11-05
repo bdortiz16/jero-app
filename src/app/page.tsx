@@ -15,43 +15,46 @@ export default async function Home() {
   const email = await getAuthEmail().catch(() => null);
   return (
     <div className="min-h-screen bg-white">
-      <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
-        <Logo size={36} />
-        <nav className="flex items-center gap-3">
-          <a href="#funciones" className="hidden text-sm text-slate-600 hover:text-slate-900 sm:block">Funciones</a>
-          <a href="#como" className="hidden text-sm text-slate-600 hover:text-slate-900 sm:block">Cómo funciona</a>
-          <Link href="/pagos" className="btn-secondary">Consulta tus pagos</Link>
+      <header className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-4 sm:px-6 sm:py-5">
+        <Logo size={32} />
+        <nav className="flex items-center gap-2 sm:gap-3">
+          <a href="#funciones" className="hidden text-sm text-slate-600 hover:text-slate-900 md:block">Funciones</a>
+          <a href="#como" className="hidden text-sm text-slate-600 hover:text-slate-900 md:block">Cómo funciona</a>
+          <Link href="/pagos" className="btn-secondary hidden whitespace-nowrap sm:inline-flex">Consulta tus pagos</Link>
           {email ? (
-            <Link href="/app" className="btn-primary">Ir a la app</Link>
+            <Link href="/app" className="btn-primary whitespace-nowrap px-3 text-sm sm:px-4">Ir a la app</Link>
           ) : (
-            <Link href="/login" className="btn-primary">Iniciar sesión</Link>
+            <Link href="/login" className="btn-primary whitespace-nowrap px-3 text-sm sm:px-4">Iniciar sesión</Link>
           )}
         </nav>
       </header>
 
-      <section className="mx-auto max-w-6xl px-6 pt-16 pb-24 text-center">
-        <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">Integrado con Siigo Nube</span>
-        <h1 className="mx-auto mt-6 max-w-3xl text-4xl font-bold tracking-tight sm:text-6xl">
-          Emite <span className="text-brand-600">cientos de facturas</span> electrónicas en minutos
-        </h1>
-        <p className="mx-auto mt-6 max-w-2xl text-lg text-slate-600">
-          Jero es el sistema contable que conecta tu operación con Siigo: carga un archivo, revisa y factura masivamente,
-          con reportes listos para tu contador.
-        </p>
-        <div className="mt-10 flex justify-center gap-3">
-          <Link href="/login" className="btn-primary px-6 py-3 text-base">Empezar ahora</Link>
-          <a href="#como" className="btn-secondary px-6 py-3 text-base">Ver cómo funciona</a>
+      {/* Los clientes ven un solo valor en su factura y no saben a qué pagos corresponde: aquí lo consultan.
+          Va arriba de todo porque la mayoría llega desde el celular por un enlace de WhatsApp. */}
+      <section className="mx-auto max-w-4xl px-4 pt-2 sm:px-6 sm:pt-6">
+        <div className="flex flex-col gap-4 rounded-2xl border border-emerald-200 bg-brand-50 p-5 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+          <div>
+            <h2 className="text-lg font-semibold text-brand-900 sm:text-xl">¿Recibiste pagos de JERO o KAUPALOKI?</h2>
+            <p className="mt-1 text-sm text-brand-800 sm:text-base">Mira cada pago (fecha, valor y factura) con tu cédula o NIT.</p>
+          </div>
+          <Link href="/pagos" className="btn-primary w-full shrink-0 justify-center px-6 py-3 text-base sm:w-auto">
+            Consulta tus pagos →
+          </Link>
         </div>
       </section>
 
-      {/* Los clientes ven un solo valor en su factura y no saben a qué pagos corresponde: aquí lo consultan. */}
-      <section className="mx-auto mb-16 max-w-4xl px-6">
-        <div className="card flex flex-col items-center justify-between gap-4 border-brand-200 bg-brand-50 text-center sm:flex-row sm:text-left">
-          <div>
-            <h2 className="text-lg font-semibold text-brand-900">¿Recibiste pagos de JERO o KAUPALOKI?</h2>
-            <p className="mt-1 text-sm text-brand-800">Consulta el detalle de cada pago (fecha, valor y factura) con tu cédula o NIT.</p>
-          </div>
-          <Link href="/pagos" className="btn-primary shrink-0 px-6 py-3 text-base">Consulta tus pagos</Link>
+      <section className="mx-auto max-w-6xl px-4 pt-12 pb-20 text-center sm:px-6 sm:pt-16 sm:pb-24">
+        <span className="rounded-full bg-brand-50 px-3 py-1 text-xs font-medium text-brand-700">Integrado con Siigo Nube</span>
+        <h1 className="mx-auto mt-6 max-w-3xl text-3xl font-bold tracking-tight sm:text-6xl">
+          Emite <span className="text-brand-600">cientos de facturas</span> electrónicas en minutos
+        </h1>
+        <p className="mx-auto mt-6 max-w-2xl text-base text-slate-600 sm:text-lg">
+          Jero es el sistema contable que conecta tu operación con Siigo: carga un archivo, revisa y factura masivamente,
+          con reportes listos para tu contador.
+        </p>
+        <div className="mt-10 flex flex-col justify-center gap-3 sm:flex-row">
+          <Link href="/login" className="btn-primary justify-center px-6 py-3 text-base">Empezar ahora</Link>
+          <a href="#como" className="btn-secondary justify-center px-6 py-3 text-base">Ver cómo funciona</a>
         </div>
       </section>
 
