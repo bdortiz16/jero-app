@@ -192,6 +192,13 @@ export function PaymentLookup() {
                         <td></td>
                       </tr>
                     )}
+                    <tr className="border-t-2 border-slate-300 bg-slate-50 text-base font-semibold">
+                      <td>Total</td>
+                      <td></td>
+                      <td className="text-right tabular-nums">{res.groups.reduce((s, g) => s + g.payments.length, 0)}</td>
+                      <td className="whitespace-nowrap text-right tabular-nums">{money(res.groups.reduce((s, g) => s + g.total, 0))}</td>
+                      <td></td>
+                    </tr>
                   </tbody>
                 </table>
               </div>
