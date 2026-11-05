@@ -19,6 +19,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       items: [
         { href: "/app", label: "Inicio" },
         { href: "/app/movimientos", label: "Movimientos" },
+        { href: "/app/pagos", label: "Pagos a clientes" },
         { href: "/app/masiva", label: "Facturación masiva" },
         { href: "/app/facturas", label: "Facturas" },
         { href: "/app/modelos", label: "Modelos de negocio" },

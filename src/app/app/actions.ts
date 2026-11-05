@@ -702,7 +702,7 @@ export async function importWithdrawalsChunk(input: { fileName: string; first: b
         },
       })
       .returning({ id: t.id });
-    revalidatePath("/app/movimientos");
+    revalidatePath("/app/pagos");
     return { saved: saved.length };
   } catch (e) {
     return { error: errMsg(e) };
