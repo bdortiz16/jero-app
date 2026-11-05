@@ -56,7 +56,8 @@ export default async function MovimientosPage({
     db.select().from(schema.movements).where(cond).orderBy(...movementOrder(orden)).limit(PAGE + 1).offset((page - 1) * PAGE),
     db.selectDistinct({ company: schema.movements.company }).from(schema.movements).orderBy(asc(schema.movements.company)),
     db.execute(sql`select status, count(*)::int as n, coalesce(sum(amount),0)::float8 as total from movements group by status`),
-    db.select({ n: sql<number>`count(*)::int` }).from(schema.withdrawals),
+    // Si la tabla de retiros aún no existe (actualización de tablas pendiente), la página carga igual.
+    db.select({ n: sql<number>`count(*)::int` }).from(schema.withdrawals).catch(() => [{ n: 0 }]),
   ]);
   const withdrawalCount = Number(wCount[0]?.n ?? 0);
   const by = Object.fromEntries(rowsOf<{ status: string; n: number; total: number }>(totals).map((t) => [t.status, t]));

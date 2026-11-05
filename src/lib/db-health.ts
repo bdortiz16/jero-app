@@ -30,8 +30,10 @@ export function dbActivity() {
       order by segundos desc limit 10`;
     const tables = await sql<{ t: string; ok: boolean }[]>`
       select t, to_regclass(t) is not null as ok
-      from unnest(array['users','invoices','business_models','movements','customers']) as t`;
-    return { actividad: rows, tablas: Object.fromEntries(tables.map((r) => [r.t, r.ok])) };
+      from unnest(array['users','invoices','business_models','movements','customers','emission_jobs','withdrawals','payment_lookups']) as t`;
+    // Cuántas migraciones se aplicaron (si es menos que las del despliegue, la actualización de tablas no terminó).
+    const [mig] = await sql<{ n: number }[]>`select count(*)::int as n from drizzle.__drizzle_migrations`.catch(() => [{ n: -1 }]);
+    return { actividad: rows, tablas: Object.fromEntries(tables.map((r) => [r.t, r.ok])), migraciones_aplicadas: mig?.n ?? -1 };
   });
 }
 
