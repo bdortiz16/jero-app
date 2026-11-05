@@ -17,7 +17,7 @@ describe("retiros", () => {
     expect(r.sheets).toEqual(["JERO"]);
     expect(r.rows).toHaveLength(1);
     expect(r.skipped).toBe(1);
-    expect(r.rows[0]).toMatchObject({ company: "JERO", idKey: "12345678", accountLast4: "1234", netAmount: 15750000, invoiceRef: "FV-1-100" });
+    expect(r.rows[0]).toMatchObject({ company: "JERO", idKey: "12345678", accountLast4: "1234", netAmount: 15750000, invoiceRef: "FV-1-100", invoicedAmount: 0, pendingAmount: 0 });
     // 18:27:09.999 "hora del Excel" = 18:27:10 en Bogotá = 23:27:10 UTC
     expect(r.rows[0].paidAt).toBe("2026-01-02T23:27:10.000Z");
   });

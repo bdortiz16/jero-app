@@ -3,14 +3,29 @@ import { and, eq, gte, inArray, sql } from "drizzle-orm";
 import { getDb, schema } from "@/db";
 import { lookupKeys } from "./withdrawals";
 
+/** Un pago (o la parte de un pago) dentro de una factura. */
 export type PaymentRow = {
   paidAt: string;
   company: string;
-  beneficiary: string;
-  identification: string;
   bank: string | null;
   amount: number;
-  invoice: string | null;
+  /** Valor completo del pago, cuando en esta factura solo entra una parte. */
+  full: number | null;
+  /** Factura(s) anteriores donde quedó el pago (solo en el grupo "anterior"). */
+  invoices: string | null;
+};
+
+/** Pagos agrupados por la factura en la que quedaron. */
+export type InvoiceGroup = {
+  key: string;
+  /** "jero": factura emitida desde Jero (se puede ver el PDF); "anterior": facturas emitidas antes (todas juntas); "pendiente": aún sin factura. */
+  kind: "jero" | "anterior" | "pendiente";
+  number: string | null;
+  date: string | null;
+  invoiceId: number | null;
+  invoiceTotal: number | null;
+  total: number;
+  payments: PaymentRow[];
 };
 
 /** Resumen por periodo (de los movimientos "Facturas por emitir"), cuando no hay detalle de retiros cargado. */
@@ -23,6 +38,7 @@ export type PeriodRow = {
   withdrawals: number | null;
   amount: number;
   invoice: string | null;
+  invoiceId: number | null;
 };
 
 // Límites para que nadie recorra documentos al azar: por IP y por documento, en la última hora.
@@ -36,7 +52,10 @@ const day = (d: Date | null) => (d ? d.toLocaleDateString("en-CA", { timeZone: "
  * tienen otro dato a mano). Para que nadie recorra documentos al azar hay límite de consultas por
  * IP, y de la cuenta destino no se muestra ningún dígito, solo el banco.
  */
-export async function lookupPayments(doc: string, ip: string): Promise<{ ok: true; rows: PaymentRow[]; periods: PeriodRow[] } | { ok: false; error: string }> {
+export async function lookupPayments(doc: string, ip: string): Promise<
+  | { ok: true; beneficiary: string; identification: string; count: number; total: number; groups: InvoiceGroup[]; periods: PeriodRow[] }
+  | { ok: false; error: string }
+> {
   const keys = lookupKeys(doc);
   if (!keys.length) return { ok: false, error: "Escribe tu cédula o NIT (solo números)." };
 
@@ -60,7 +79,7 @@ export async function lookupPayments(doc: string, ip: string): Promise<{ ok: tru
   const periods = all.length
     ? []
     : await db
-        .select({ m: schema.movements, number: schema.invoices.siigoNumber })
+        .select({ m: schema.movements, number: schema.invoices.siigoNumber, invoiceId: schema.invoices.id, invStatus: schema.invoices.status })
         .from(schema.movements)
         .leftJoin(schema.invoices, eq(schema.invoices.id, schema.movements.invoiceId))
         .where(inArray(schema.movements.identification, keys))
@@ -71,8 +90,12 @@ export async function lookupPayments(doc: string, ip: string): Promise<{ ok: tru
   if (!all.length) {
     return {
       ok: true,
-      rows: [],
-      periods: periods.map(({ m, number }) => ({
+      beneficiary: periods[0].m.customerName,
+      identification: periods[0].m.identificationRaw,
+      count: periods.reduce((s, p) => s + (p.m.withdrawals ?? 0), 0),
+      total: periods.reduce((s, p) => s + Number(p.m.amount), 0),
+      groups: [],
+      periods: periods.map(({ m, number, invoiceId, invStatus }) => ({
         company: m.company,
         beneficiary: m.customerName,
         identification: m.identificationRaw,
@@ -81,33 +104,87 @@ export async function lookupPayments(doc: string, ip: string): Promise<{ ok: tru
         withdrawals: m.withdrawals,
         amount: Number(m.amount),
         invoice: number ?? null,
+        invoiceId: invStatus === "sent" ? invoiceId : null,
       })),
     };
   }
 
-  // Número de factura: el del archivo de cruce o, si no, el de la factura emitida desde Jero
-  // para el movimiento que cubre la fecha del retiro.
+  // La factura emitida desde Jero para un pago: la del movimiento ("Facturas por emitir") de la misma
+  // empresa cuyo periodo cubre la fecha del pago.
   const movs = await db
-    .select({ company: schema.movements.company, from: schema.movements.dateFrom, to: schema.movements.dateTo, number: schema.invoices.siigoNumber })
+    .select({
+      company: schema.movements.company,
+      from: schema.movements.dateFrom,
+      to: schema.movements.dateTo,
+      id: schema.invoices.id,
+      number: schema.invoices.siigoNumber,
+      date: schema.invoices.date,
+      total: schema.invoices.total,
+    })
     .from(schema.movements)
     .innerJoin(schema.invoices, eq(schema.invoices.id, schema.movements.invoiceId))
-    .where(inArray(schema.movements.identification, keys));
-  const invoiceFor = (company: string, paidAt: Date) => {
+    .where(and(inArray(schema.movements.identification, keys), eq(schema.invoices.status, "sent")));
+  const jeroInvoiceFor = (company: string, paidAt: Date) => {
     const d = day(paidAt)!;
-    return movs.find((m) => m.number && m.company.toUpperCase() === company && day(m.from)! <= d && d <= day(m.to)!)?.number ?? null;
+    return movs.find((m) => m.company.toUpperCase() === company && day(m.from)! <= d && d <= day(m.to)!) ?? null;
   };
+
+  // Cada pago va a la factura donde quedó: lo ya facturado antes (columna "Factura(s) FV" del cruce) y
+  // lo que faltaba, a la factura que emitió Jero. Un pago facturado en parte sale en las dos.
+  const groups = new Map<string, InvoiceGroup>();
+  const add = (g: Omit<InvoiceGroup, "total" | "payments">, p: PaymentRow) => {
+    const cur = groups.get(g.key) ?? { ...g, total: 0, payments: [] };
+    cur.payments.push(p);
+    cur.total += p.amount;
+    groups.set(g.key, cur);
+  };
+  const cents = (n: number) => Math.round(n * 100) / 100;
+  for (const w of all) {
+    const net = Number(w.netAmount);
+    const invoiced = w.invoicedAmount !== null ? Number(w.invoicedAmount) : w.invoiceRef && w.status === "FACTURADA" ? net : 0;
+    const pending = w.pendingAmount !== null ? Number(w.pendingAmount) : cents(net - invoiced);
+    const base = { paidAt: w.paidAt.toISOString(), company: w.company, bank: w.bank, invoices: null };
+    // Las facturas anteriores van juntas: un pago suele repartirse entre dos de ellas y por separado
+    // salían decenas de grupos sueltos que el cliente no entendía.
+    if (w.invoiceRef && invoiced > 0.005) {
+      add(
+        { key: "anterior", kind: "anterior", number: null, date: null, invoiceId: null, invoiceTotal: null },
+        { ...base, invoices: w.invoiceRef, amount: cents(invoiced), full: invoiced < net - 0.005 ? net : null },
+      );
+    }
+    if (pending > 0.005) {
+      const inv = jeroInvoiceFor(w.company, w.paidAt);
+      add(
+        inv
+          ? { key: `jero:${inv.id}`, kind: "jero", number: inv.number, date: inv.date, invoiceId: inv.id, invoiceTotal: Number(inv.total) }
+          : { key: "pendiente", kind: "pendiente", number: null, date: null, invoiceId: null, invoiceTotal: null },
+        { ...base, amount: cents(pending), full: pending < net - 0.005 ? net : null },
+      );
+    }
+  }
+  // Primero las facturas de Jero (las que el cliente recibió y está revisando), de la más reciente a la
+  // más antigua; luego lo facturado antes y, al final, lo que falta por facturar.
+  const rank = { jero: 0, anterior: 1, pendiente: 2 } as const;
+  const ordered = [...groups.values()].sort((a, b) => rank[a.kind] - rank[b.kind] || (b.date ?? "").localeCompare(a.date ?? ""));
 
   return {
     ok: true,
+    beneficiary: all[0].beneficiary,
+    identification: all[0].identificationRaw,
+    count: all.length,
+    total: all.reduce((s, w) => s + Number(w.netAmount), 0),
+    groups: ordered,
     periods: [],
-    rows: all.map((w) => ({
-      paidAt: w.paidAt.toISOString(),
-      company: w.company,
-      beneficiary: w.beneficiary,
-      identification: w.identificationRaw,
-      bank: w.bank,
-      amount: Number(w.netAmount),
-      invoice: w.invoiceRef || invoiceFor(w.company, w.paidAt),
-    })),
   };
+}
+
+/** ¿La factura (emitida desde Jero) es de este documento? Para dejar ver su PDF desde la consulta pública. */
+export async function invoiceOfDocument(invoiceId: number, doc: string) {
+  const keys = lookupKeys(doc);
+  if (!keys.length || !Number.isInteger(invoiceId)) return null;
+  const db = await getDb();
+  const inv = await db.query.invoices.findFirst({
+    where: and(eq(schema.invoices.id, invoiceId), inArray(schema.invoices.customerIdentification, keys), eq(schema.invoices.status, "sent")),
+  });
+  return inv?.siigoId ? inv : null;
 }

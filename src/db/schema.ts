@@ -246,6 +246,9 @@ export const withdrawals = pgTable(
     netAmount: numeric("net_amount", { precision: 18, scale: 2 }).notNull(),
     status: text("status"),
     invoiceRef: text("invoice_ref"),
+    // Del pago: cuánto ya quedó en facturas anteriores (invoiceRef) y cuánto faltaba por facturar
+    invoicedAmount: numeric("invoiced_amount", { precision: 18, scale: 2 }),
+    pendingAmount: numeric("pending_amount", { precision: 18, scale: 2 }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

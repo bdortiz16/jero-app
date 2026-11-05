@@ -684,6 +684,8 @@ export async function importWithdrawalsChunk(input: { fileName: string; first: b
       paidAt: new Date(r.paidAt),
       amount: Number(r.amount).toFixed(2),
       netAmount: Number(r.netAmount).toFixed(2),
+      invoicedAmount: r.invoicedAmount === null || r.invoicedAmount === undefined ? null : Number(r.invoicedAmount).toFixed(2),
+      pendingAmount: r.pendingAmount === null || r.pendingAmount === undefined ? null : Number(r.pendingAmount).toFixed(2),
       accountLast4: r.accountLast4 && /^\d{4}$/.test(r.accountLast4) ? r.accountLast4 : null,
     }));
     const t = schema.withdrawals;
@@ -698,6 +700,8 @@ export async function importWithdrawalsChunk(input: { fileName: string; first: b
           accountLast4: sql`excluded.account_last4`,
           status: sql`excluded.status`,
           invoiceRef: sql`excluded.invoice_ref`,
+          invoicedAmount: sql`excluded.invoiced_amount`,
+          pendingAmount: sql`excluded.pending_amount`,
           updatedAt: sql`now()`,
         },
       })

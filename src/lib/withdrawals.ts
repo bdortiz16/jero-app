@@ -15,6 +15,8 @@ export type WithdrawalDTO = {
   netAmount: number;
   status: string | null;
   invoiceRef: string | null;
+  invoicedAmount: number | null;
+  pendingAmount: number | null;
 };
 
 type Sheet = { sheet: string; data: unknown[][] };
@@ -73,6 +75,8 @@ export function parseWithdrawalSheets(sheets: Sheet[]): { rows: WithdrawalDTO[];
       estado: col("estado"),
       factura: col("factura_s_fv", "facturas_fv", "factura_fv", "factura"),
       clave: col("clave_tercero"),
+      facturado: col("valor_facturado_asignado"),
+      pendiente: col("pendiente_por_facturar"),
     };
     const company = sheet.trim().toUpperCase();
     for (const r of data.slice(start + 1)) {
@@ -102,6 +106,8 @@ export function parseWithdrawalSheets(sheets: Sheet[]): { rows: WithdrawalDTO[];
         netAmount: net,
         status,
         invoiceRef: String(at(c.factura) ?? "").trim() || null,
+        invoicedAmount: c.facturado >= 0 && Number.isFinite(num(at(c.facturado))) ? num(at(c.facturado)) : null,
+        pendingAmount: c.pendiente >= 0 && Number.isFinite(num(at(c.pendiente))) ? num(at(c.pendiente)) : null,
       });
     }
   }
