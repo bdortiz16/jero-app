@@ -1,4 +1,5 @@
 import {
+  customType,
   pgTable,
   text,
   timestamp,
@@ -275,6 +276,9 @@ export const paymentLookups = pgTable(
  * Solicitudes de nota crédito que hacen los clientes desde la consulta pública de pagos cuando no
  * están de acuerdo con una factura. El equipo las revisa en la app (Notas crédito).
  */
+/** Archivo binario (PDF de la nota crédito) guardado en la base. */
+const bytea = customType<{ data: Buffer; driverData: Buffer }>({ dataType: () => "bytea" });
+
 export const creditNoteRequests = pgTable(
   "credit_note_requests",
   {
@@ -286,13 +290,20 @@ export const creditNoteRequests = pgTable(
     identification: text("identification").notNull(),
     beneficiary: text("beneficiary"),
     contactName: text("contact_name").notNull(),
-    email: text("email").notNull(),
+    // Correo o celular: al menos uno
+    email: text("email"),
     phone: text("phone"),
     reason: text("reason").notNull(),
     detail: text("detail").notNull(),
     // pendiente | en_revision | aprobada | rechazada
     status: text("status").notNull().default("pendiente"),
     adminNote: text("admin_note"),
+    // Lo que ve el cliente al volver a consultar: respuesta, y la nota crédito emitida (número y PDF)
+    clientMessage: text("client_message"),
+    creditNoteNumber: text("credit_note_number"),
+    creditNoteFile: bytea("credit_note_file"),
+    creditNoteFileName: text("credit_note_file_name"),
+    creditNoteAt: timestamp("credit_note_at", { withTimezone: true }),
     ip: text("ip"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),

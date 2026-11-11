@@ -34,7 +34,10 @@ export async function requestCreditNote(input: CreditNoteInput, ip: string): Pro
   const reason = (CREDIT_NOTE_REASONS as readonly string[]).includes(input.reason) ? input.reason : null;
   if (!reason) return { ok: false, error: "Elige el motivo de la solicitud." };
   if (contactName.length < 3) return { ok: false, error: "Escribe tu nombre." };
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return { ok: false, error: "Escribe un correo válido para responderte." };
+  // Basta un medio de contacto: correo o celular.
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email)) return { ok: false, error: "El correo no es válido." };
+  if (phone && phone.replace(/\D/g, "").length < 7) return { ok: false, error: "El celular no es válido." };
+  if (!email && !phone) return { ok: false, error: "Déjanos un correo o un celular para responderte." };
   if (detail.length < 10) return { ok: false, error: "Cuéntanos en pocas palabras qué está mal (mínimo 10 caracteres)." };
 
   // La factura debe ser de este documento: una emitida desde Jero, o una anterior donde quedaron sus pagos.
@@ -71,6 +74,6 @@ export async function requestCreditNote(input: CreditNoteInput, ip: string): Pro
   });
   if (open) return { ok: true, already: true };
 
-  await db.insert(T).values({ invoiceId, invoiceNumber, idKey, identification, beneficiary, contactName, email, phone: phone || null, reason, detail, ip });
+  await db.insert(T).values({ invoiceId, invoiceNumber, idKey, identification, beneficiary, contactName, email: email || null, phone: phone || null, reason, detail, ip });
   return { ok: true, already: false };
 }

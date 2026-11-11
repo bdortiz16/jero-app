@@ -713,19 +713,39 @@ export async function importWithdrawalsChunk(input: { fileName: string; first: b
   }
 }
 
-/** Cambia el estado de una solicitud de nota crédito (y deja una nota interna). */
+/**
+ * Gestiona una solicitud de nota crédito: estado, nota interna, respuesta para el cliente y la nota
+ * crédito emitida (número y PDF). Al adjuntar el PDF la solicitud queda como emitida y el cliente la
+ * ve al volver a consultar sus pagos.
+ */
 export async function updateCreditNoteRequest(_: ActionState, fd: FormData): Promise<ActionState> {
   const user = await requireEditor();
   const id = Number(fd.get("id"));
-  const status = String(fd.get("status") ?? "");
-  const note = String(fd.get("adminNote") ?? "").trim().slice(0, 2000) || null;
+  let status = String(fd.get("status") ?? "");
   if (!Number.isInteger(id) || !["pendiente", "en_revision", "aprobada", "rechazada"].includes(status)) return { error: "Datos inválidos" };
+  const text = (k: string, max: number) => String(fd.get(k) ?? "").trim().slice(0, max) || null;
+  const set: Partial<typeof schema.creditNoteRequests.$inferInsert> = {
+    adminNote: text("adminNote", 2000),
+    clientMessage: text("clientMessage", 2000),
+    creditNoteNumber: text("creditNoteNumber", 40),
+    updatedAt: new Date(),
+    updatedBy: user.id,
+  };
+  const file = fd.get("file");
+  if (file instanceof File && file.size > 0) {
+    if (file.size > 8 * 1024 * 1024) return { error: "El PDF pesa más de 8 MB" };
+    const bytes = Buffer.from(await file.arrayBuffer());
+    if (bytes.subarray(0, 5).toString() !== "%PDF-") return { error: "El archivo debe ser un PDF" };
+    set.creditNoteFile = bytes;
+    set.creditNoteFileName = file.name.slice(0, 120) || "nota-credito.pdf";
+    set.creditNoteAt = new Date();
+    status = "aprobada";
+  }
+  if (status === "aprobada" && !set.creditNoteNumber) return { error: "Escribe el número de la nota crédito (ej. NC-1-25)" };
+  set.status = status;
   const db = await getDb();
-  await db
-    .update(schema.creditNoteRequests)
-    .set({ status, adminNote: note, updatedAt: new Date(), updatedBy: user.id })
-    .where(eq(schema.creditNoteRequests.id, id));
-  await audit(user, "credit_note.update", { id, status });
+  await db.update(schema.creditNoteRequests).set(set).where(eq(schema.creditNoteRequests.id, id));
+  await audit(user, "credit_note.update", { id, status, file: Boolean(set.creditNoteFile) });
   revalidatePath("/app/notas-credito");
-  return { ok: "Guardado" };
+  return { ok: status === "aprobada" ? "Guardado: el cliente ya ve la nota crédito al consultar" : "Guardado" };
 }

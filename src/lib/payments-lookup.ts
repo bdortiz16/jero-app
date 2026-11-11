@@ -16,6 +16,17 @@ export type PaymentRow = {
   invoices: string | null;
 };
 
+/** Solicitud de nota crédito del cliente, como la ve él al consultar (sin datos internos). */
+export type ClientCreditNote = {
+  id: number;
+  invoiceNumber: string;
+  status: string;
+  createdAt: string;
+  clientMessage: string | null;
+  creditNoteNumber: string | null;
+  hasFile: boolean;
+};
+
 /** Pagos agrupados por la factura en la que quedaron. */
 export type InvoiceGroup = {
   key: string;
@@ -71,7 +82,7 @@ const day = (d: Date | null) => (d ? d.toLocaleDateString("en-CA", { timeZone: "
  * IP, y de la cuenta destino no se muestra ningún dígito, solo el banco.
  */
 export async function lookupPayments(doc: string, ip: string): Promise<
-  | { ok: true; beneficiary: string; identification: string; count: number; total: number; groups: InvoiceGroup[]; periods: PeriodRow[] }
+  | { ok: true; beneficiary: string; identification: string; count: number; total: number; groups: InvoiceGroup[]; periods: PeriodRow[]; creditNotes: ClientCreditNote[] }
   | { ok: false; error: string }
 > {
   const parsed = parseDocInput(doc);
@@ -118,9 +129,11 @@ export async function lookupPayments(doc: string, ip: string): Promise<
       error: "No encontramos pagos con ese documento. Revisa el número: escribe la cédula o el NIT tal como aparece en tu documento (con o sin puntos, guion y dígito de verificación).",
     };
   }
+  const creditNotes = await creditNotesForDocument(parsed);
   if (!all.length) {
     return {
       ok: true,
+      creditNotes,
       beneficiary: periods[0].m.customerName,
       identification: periods[0].m.identificationRaw,
       count: periods.reduce((s, p) => s + (p.m.withdrawals ?? 0), 0),
@@ -206,6 +219,7 @@ export async function lookupPayments(doc: string, ip: string): Promise<
     total: all.reduce((s, w) => s + Number(w.netAmount), 0),
     groups: ordered,
     periods: [],
+    creditNotes,
   };
 }
 
@@ -238,4 +252,38 @@ export async function documentHasOldInvoice(doc: string, number: string) {
     )
     .limit(1);
   return w ?? null;
+}
+
+/** Las solicitudes de nota crédito de un documento, para mostrarle al cliente su estado y la nota emitida. */
+async function creditNotesForDocument(p: DocInput): Promise<ClientCreditNote[]> {
+  const db = await getDb();
+  const T = schema.creditNoteRequests;
+  const rows = await db
+    .select({
+      id: T.id,
+      invoiceNumber: T.invoiceNumber,
+      status: T.status,
+      createdAt: T.createdAt,
+      clientMessage: T.clientMessage,
+      creditNoteNumber: T.creditNoteNumber,
+      hasFile: sql<boolean>`${T.creditNoteFile} is not null`,
+    })
+    .from(T)
+    .where(inArray(T.idKey, [p.full, ...(p.base ? [p.base] : [])]))
+    .orderBy(T.createdAt);
+  return rows.map((r) => ({ ...r, createdAt: r.createdAt.toISOString(), hasFile: Boolean(r.hasFile) }));
+}
+
+/** PDF de la nota crédito de una solicitud, solo si es del documento consultado. */
+export async function creditNoteFileForDocument(id: number, doc: string) {
+  const p = parseDocInput(doc);
+  if (!p || !Number.isInteger(id)) return null;
+  const db = await getDb();
+  const T = schema.creditNoteRequests;
+  const [r] = await db
+    .select({ file: T.creditNoteFile, name: T.creditNoteFileName, number: T.creditNoteNumber })
+    .from(T)
+    .where(and(eq(T.id, id), inArray(T.idKey, [p.full, ...(p.base ? [p.base] : [])])))
+    .limit(1);
+  return r?.file ? r : null;
 }

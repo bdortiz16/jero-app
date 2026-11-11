@@ -1,11 +1,11 @@
 "use client";
 import { useState } from "react";
 import { bankLabel } from "@/lib/withdrawals";
-import type { InvoiceGroup, PeriodRow } from "@/lib/payments-lookup";
+import type { ClientCreditNote, InvoiceGroup, PeriodRow } from "@/lib/payments-lookup";
 import { CREDIT_NOTE_REASONS } from "@/lib/credit-note-options";
 import { consultarPagos, solicitarNotaCredito } from "./actions";
 
-type Result = { beneficiary: string; identification: string; count: number; total: number; groups: InvoiceGroup[]; periods: PeriodRow[] };
+type Result = { beneficiary: string; identification: string; count: number; total: number; groups: InvoiceGroup[]; periods: PeriodRow[]; creditNotes: ClientCreditNote[] };
 
 const money = (n: number) => n.toLocaleString("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 2 });
 const when = (iso: string) =>
@@ -43,8 +43,42 @@ const refsOf = (g: InvoiceGroup) => [...new Set(g.payments.flatMap((p) => (p.inv
 
 const pdfUrl = (id: number, doc: string, download = false) => `/api/pagos/factura/${id}?doc=${encodeURIComponent(doc)}${download ? "&descargar=1" : ""}`;
 
+const ncUrl = (id: number, doc: string) => `/api/pagos/nota-credito/${id}?doc=${encodeURIComponent(doc)}`;
+
+/** Estado de una solicitud de nota crédito como la ve el cliente. */
+function CreditNoteStatus({ n, doc }: { n: ClientCreditNote; doc: string }) {
+  const sent = shortDay(n.createdAt);
+  if (n.status === "aprobada") {
+    return (
+      <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900">
+        <p className="font-semibold">✓ Nota crédito {n.creditNoteNumber ?? ""} emitida{n.invoiceNumber ? ` para la factura ${n.invoiceNumber}` : ""}</p>
+        {n.clientMessage && <p className="mt-1">{n.clientMessage}</p>}
+        {n.hasFile && (
+          <a href={ncUrl(n.id, doc)} target="_blank" rel="noopener" className="btn mt-3 w-full bg-emerald-600 px-5 py-2.5 text-white hover:bg-emerald-700 sm:w-auto">
+            Ver nota crédito (PDF)
+          </a>
+        )}
+      </div>
+    );
+  }
+  if (n.status === "rechazada") {
+    return (
+      <div className="rounded-xl border border-slate-300 bg-slate-50 p-4 text-sm text-slate-700">
+        <p className="font-semibold">Revisamos tu solicitud del {sent}{n.invoiceNumber ? ` (factura ${n.invoiceNumber})` : ""}: no procede la nota crédito.</p>
+        {n.clientMessage && <p className="mt-1">{n.clientMessage}</p>}
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-900">
+      <p className="font-semibold">Tu solicitud de nota crédito{n.invoiceNumber ? ` de la factura ${n.invoiceNumber}` : ""} está {n.status === "en_revision" ? "en revisión" : "recibida"}.</p>
+      <p className="mt-1">La enviaste el {sent}. {n.clientMessage ?? "Te avisaremos cuando la revisemos; también la verás aquí."}</p>
+    </div>
+  );
+}
+
 /** "¿No estás de acuerdo con esta factura?" → formulario corto para pedir nota crédito. */
-function CreditNoteBox({ g, doc }: { g: InvoiceGroup; doc: string }) {
+function CreditNoteBox({ g, doc, requests }: { g: InvoiceGroup; doc: string; requests: ClientCreditNote[] }) {
   const refs = g.kind === "anterior" ? refsOf(g) : [];
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -53,11 +87,24 @@ function CreditNoteBox({ g, doc }: { g: InvoiceGroup; doc: string }) {
   const [f, setF] = useState({ invoiceNumber: refs[0] ?? "", reason: "", detail: "", contactName: "", email: "", phone: "" });
   const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
 
+  // Lo que ya pidió para esta factura: el estado, o la nota crédito emitida. Con una solicitud abierta
+  // no se ofrece pedir otra.
+  const openReq = requests.some((n) => n.status === "pendiente" || n.status === "en_revision");
+  if (requests.length && !sent && !open) {
+    return (
+      <div className="mx-4 mb-4 space-y-3 sm:mx-5">
+        {requests.map((n) => <CreditNoteStatus key={n.id} n={n} doc={doc} />)}
+        {!openReq && (
+          <button onClick={() => setOpen(true)} className="text-sm font-medium text-amber-700 underline">¿Aún no estás de acuerdo? Solicitar otra nota crédito</button>
+        )}
+      </div>
+    );
+  }
   if (sent) {
     return (
       <div className="mx-4 mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 sm:mx-5">
-        <b>{sent === "ya" ? "Ya tenemos tu solicitud en revisión." : "Recibimos tu solicitud de nota crédito."}</b> Te escribiremos a {f.email} cuando la
-        revisemos.
+        <b>{sent === "ya" ? "Ya tenemos tu solicitud en revisión." : "Recibimos tu solicitud de nota crédito."}</b> Te contactaremos a{" "}
+        {[f.email, f.phone].filter(Boolean).join(" o ")} cuando la revisemos, y la verás aquí cuando consultes de nuevo.
       </div>
     );
   }
@@ -76,6 +123,7 @@ function CreditNoteBox({ g, doc }: { g: InvoiceGroup; doc: string }) {
   }
   async function submit(e: React.FormEvent) {
     e.preventDefault();
+    if (!f.email.trim() && !f.phone.trim()) return setError("Déjanos un correo o un celular para responderte.");
     setBusy(true);
     setError(null);
     const r = await solicitarNotaCredito({ doc, invoiceId: g.invoiceId, ...f });
@@ -87,7 +135,7 @@ function CreditNoteBox({ g, doc }: { g: InvoiceGroup; doc: string }) {
     <form onSubmit={submit} className="mx-4 mb-4 space-y-3 rounded-xl border border-amber-300 bg-amber-50/60 p-4 sm:mx-5">
       <div>
         <h3 className="font-semibold">Solicitar nota crédito{g.number ? ` de la factura ${g.number}` : ""}</h3>
-        <p className="text-sm text-slate-600">Cuéntanos qué no está bien. Revisamos tu solicitud y te respondemos por correo.</p>
+        <p className="text-sm text-slate-600">Cuéntanos el motivo. Déjanos tu <b>correo o celular</b> (al menos uno) para responderte.</p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2">
         {refs.length > 0 && (
@@ -115,10 +163,10 @@ function CreditNoteBox({ g, doc }: { g: InvoiceGroup; doc: string }) {
         </div>
         <div>
           <label className="label">Correo</label>
-          <input type="email" value={f.email} onChange={set("email")} className="input" required autoComplete="email" />
+          <input type="email" value={f.email} onChange={set("email")} className="input" autoComplete="email" />
         </div>
         <div>
-          <label className="label">Celular (opcional)</label>
+          <label className="label">Celular</label>
           <input value={f.phone} onChange={set("phone")} className="input" inputMode="tel" autoComplete="tel" />
         </div>
       </div>
@@ -131,7 +179,9 @@ function CreditNoteBox({ g, doc }: { g: InvoiceGroup; doc: string }) {
   );
 }
 
-function GroupCard({ g, doc, open }: { g: InvoiceGroup; doc: string; open: boolean }) {
+function GroupCard({ g, doc, open, creditNotes }: { g: InvoiceGroup; doc: string; open: boolean; creditNotes: ClientCreditNote[] }) {
+  const numbers = g.kind === "anterior" ? refsOf(g) : g.number ? [g.number] : [];
+  const requests = creditNotes.filter((n) => numbers.includes(n.invoiceNumber));
   const first = g.payments[0]?.paidAt;
   const last = g.payments[g.payments.length - 1]?.paidAt;
   const title = g.kind === "pendiente" ? "Pagos aún sin factura" : g.kind === "anterior" ? "Pagos facturados anteriormente" : `Factura ${g.number}`;
@@ -162,7 +212,7 @@ function GroupCard({ g, doc, open }: { g: InvoiceGroup; doc: string; open: boole
           )}
         </div>
       </div>
-      {g.kind !== "pendiente" && <CreditNoteBox g={g} doc={doc} />}
+      {g.kind !== "pendiente" && <CreditNoteBox g={g} doc={doc} requests={requests} />}
       <details open={open} className="border-t border-slate-200">
         <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-brand-700 hover:bg-slate-50 sm:px-5">
           Ver los {g.payments.length} {g.payments.length === 1 ? "pago" : "pagos"} de {g.kind === "jero" ? "esta factura" : "este grupo"}
@@ -264,6 +314,14 @@ export function PaymentLookup() {
             <div className="card"><div className="text-sm text-slate-500">Total recibido</div><div className="mt-1 text-2xl font-semibold tabular-nums">{money(res.total)}</div></div>
           </div>
 
+          {/* Si ya pidió notas crédito, lo primero que ve es cómo van (y la nota emitida para descargar). */}
+          {res.creditNotes.length > 0 && (
+            <div className="card space-y-3">
+              <h2 className="text-lg font-semibold">Tus solicitudes de nota crédito</h2>
+              {res.creditNotes.map((n) => <CreditNoteStatus key={n.id} n={n} doc={asked} />)}
+            </div>
+          )}
+
           {res.groups.length > 0 && (
             <>
               {/* Primero el resumen: qué facturas tiene y cuánto de sus pagos entró en cada una. */}
@@ -346,7 +404,7 @@ export function PaymentLookup() {
               <div className="space-y-4">
                 {/* La factura más reciente de Jero se muestra abierta; las demás se abren con un clic. */}
                 {res.groups.map((g) => (
-                  <GroupCard key={g.key} g={g} doc={asked} open={g === res.groups[0] && g.kind === "jero"} />
+                  <GroupCard key={g.key} g={g} doc={asked} open={g === res.groups[0] && g.kind === "jero"} creditNotes={res.creditNotes} />
                 ))}
               </div>
             </>
