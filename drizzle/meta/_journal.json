@@ -43,6 +43,13 @@
       "when": 1793905350109,
       "tag": "0005_retiros_montos",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1794377038586,
+      "tag": "0006_notas_credito",
+      "breakpoints": true
     }
   ]
 }

@@ -219,3 +219,23 @@ export async function invoiceOfDocument(invoiceId: number, doc: string) {
   });
   return inv?.siigoId ? inv : null;
 }
+
+/** ¿Algún pago de este documento quedó en esa factura anterior (columna "Factura(s) FV" del cruce)? */
+export async function documentHasOldInvoice(doc: string, number: string) {
+  const parsed = parseDocInput(doc);
+  const n = number.trim().toUpperCase();
+  if (!parsed || !/^[A-Z0-9-]{3,30}$/.test(n)) return null;
+  const db = await getDb();
+  const W = schema.withdrawals;
+  const [w] = await db
+    .select({ beneficiary: W.beneficiary, identification: W.identificationRaw })
+    .from(W)
+    .where(
+      and(
+        docMatches(parsed, W.idKey, W.identificationRaw, sql`(${W.idType} ilike '%nit%' or length(${digitsOf(W.identificationRaw)}) > length(${W.idKey}))`),
+        sql`upper(${W.invoiceRef}) ~ ${`(^|[^0-9A-Z-])${n.replace(/-/g, "\\-")}($|[^0-9])`}`,
+      ),
+    )
+    .limit(1);
+  return w ?? null;
+}

@@ -2,7 +2,8 @@
 import { useState } from "react";
 import { bankLabel } from "@/lib/withdrawals";
 import type { InvoiceGroup, PeriodRow } from "@/lib/payments-lookup";
-import { consultarPagos } from "./actions";
+import { CREDIT_NOTE_REASONS } from "@/lib/credit-note-options";
+import { consultarPagos, solicitarNotaCredito } from "./actions";
 
 type Result = { beneficiary: string; identification: string; count: number; total: number; groups: InvoiceGroup[]; periods: PeriodRow[] };
 
@@ -41,6 +42,89 @@ function downloadCsv(r: Result, doc: string) {
 const refsOf = (g: InvoiceGroup) => [...new Set(g.payments.flatMap((p) => (p.invoices ?? "").split(/[,;]\s*/)).filter(Boolean))];
 
 const pdfUrl = (id: number, doc: string, download = false) => `/api/pagos/factura/${id}?doc=${encodeURIComponent(doc)}${download ? "&descargar=1" : ""}`;
+
+/** "¿No estás de acuerdo con esta factura?" → formulario corto para pedir nota crédito. */
+function CreditNoteBox({ g, doc }: { g: InvoiceGroup; doc: string }) {
+  const refs = g.kind === "anterior" ? refsOf(g) : [];
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [sent, setSent] = useState<null | "nueva" | "ya">(null);
+  const [f, setF] = useState({ invoiceNumber: refs[0] ?? "", reason: "", detail: "", contactName: "", email: "", phone: "" });
+  const set = (k: keyof typeof f) => (e: { target: { value: string } }) => setF({ ...f, [k]: e.target.value });
+
+  if (sent) {
+    return (
+      <div className="border-t border-slate-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-900">
+        <b>{sent === "ya" ? "Ya tenemos tu solicitud en revisión." : "Recibimos tu solicitud de nota crédito."}</b> Te escribiremos a {f.email} cuando la
+        revisemos.
+      </div>
+    );
+  }
+  if (!open) {
+    return (
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
+        <p className="text-sm text-slate-700">¿No estás de acuerdo con esta factura?</p>
+        <button onClick={() => setOpen(true)} className="btn-secondary">Solicitar nota crédito</button>
+      </div>
+    );
+  }
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    const r = await solicitarNotaCredito({ doc, invoiceId: g.invoiceId, ...f });
+    setBusy(false);
+    if (!r.ok) return setError(r.error);
+    setSent(r.already ? "ya" : "nueva");
+  }
+  return (
+    <form onSubmit={submit} className="space-y-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
+      <div>
+        <h3 className="font-semibold">Solicitar nota crédito{g.number ? ` de la factura ${g.number}` : ""}</h3>
+        <p className="text-sm text-slate-600">Cuéntanos qué no está bien. Revisamos tu solicitud y te respondemos por correo.</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {refs.length > 0 && (
+          <div>
+            <label className="label">Factura</label>
+            <select value={f.invoiceNumber} onChange={set("invoiceNumber")} className="input" required>
+              {refs.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+        )}
+        <div className={refs.length ? "" : "sm:col-span-2"}>
+          <label className="label">Motivo</label>
+          <select value={f.reason} onChange={set("reason")} className="input" required>
+            <option value="">Elige un motivo…</option>
+            {CREDIT_NOTE_REASONS.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="label">¿Qué está mal?</label>
+          <textarea value={f.detail} onChange={set("detail")} className="input min-h-[80px]" required minLength={10} maxLength={2000} placeholder="Ej.: el pago del 10 de abril por $ 5.000.000 no es mío." />
+        </div>
+        <div>
+          <label className="label">Tu nombre</label>
+          <input value={f.contactName} onChange={set("contactName")} className="input" required autoComplete="name" />
+        </div>
+        <div>
+          <label className="label">Correo</label>
+          <input type="email" value={f.email} onChange={set("email")} className="input" required autoComplete="email" />
+        </div>
+        <div>
+          <label className="label">Celular (opcional)</label>
+          <input value={f.phone} onChange={set("phone")} className="input" inputMode="tel" autoComplete="tel" />
+        </div>
+      </div>
+      {error && <p className="text-sm text-red-700">{error}</p>}
+      <div className="flex flex-wrap gap-2">
+        <button className="btn-primary" disabled={busy}>{busy ? "Enviando…" : "Enviar solicitud"}</button>
+        <button type="button" className="btn-secondary" onClick={() => setOpen(false)}>Cancelar</button>
+      </div>
+    </form>
+  );
+}
 
 function GroupCard({ g, doc, open }: { g: InvoiceGroup; doc: string; open: boolean }) {
   const first = g.payments[0]?.paidAt;
@@ -99,6 +183,7 @@ function GroupCard({ g, doc, open }: { g: InvoiceGroup; doc: string; open: boole
         </table>
         {g.kind === "anterior" && <p className="px-5 py-3 text-xs text-slate-500">Estas facturas se emitieron antes; si necesitas una copia, pídela a tu asesor.</p>}
       </div>
+      {g.kind !== "pendiente" && <CreditNoteBox g={g} doc={doc} />}
     </details>
   );
 }

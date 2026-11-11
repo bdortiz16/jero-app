@@ -712,3 +712,20 @@ export async function importWithdrawalsChunk(input: { fileName: string; first: b
     return { error: errMsg(e) };
   }
 }
+
+/** Cambia el estado de una solicitud de nota crédito (y deja una nota interna). */
+export async function updateCreditNoteRequest(_: ActionState, fd: FormData): Promise<ActionState> {
+  const user = await requireEditor();
+  const id = Number(fd.get("id"));
+  const status = String(fd.get("status") ?? "");
+  const note = String(fd.get("adminNote") ?? "").trim().slice(0, 2000) || null;
+  if (!Number.isInteger(id) || !["pendiente", "en_revision", "aprobada", "rechazada"].includes(status)) return { error: "Datos inválidos" };
+  const db = await getDb();
+  await db
+    .update(schema.creditNoteRequests)
+    .set({ status, adminNote: note, updatedAt: new Date(), updatedBy: user.id })
+    .where(eq(schema.creditNoteRequests.id, id));
+  await audit(user, "credit_note.update", { id, status });
+  revalidatePath("/app/notas-credito");
+  return { ok: "Guardado" };
+}

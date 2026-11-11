@@ -271,6 +271,37 @@ export const paymentLookups = pgTable(
   (t) => [index("payment_lookups_ip").on(t.ip, t.createdAt), index("payment_lookups_key").on(t.idKey, t.createdAt)],
 );
 
+/**
+ * Solicitudes de nota crédito que hacen los clientes desde la consulta pública de pagos cuando no
+ * están de acuerdo con una factura. El equipo las revisa en la app (Notas crédito).
+ */
+export const creditNoteRequests = pgTable(
+  "credit_note_requests",
+  {
+    id: serial("id").primaryKey(),
+    // Factura emitida desde Jero (si la hay) y su número, o el número de una factura anterior
+    invoiceId: integer("invoice_id").references(() => invoices.id),
+    invoiceNumber: text("invoice_number").notNull(),
+    idKey: text("id_key").notNull(),
+    identification: text("identification").notNull(),
+    beneficiary: text("beneficiary"),
+    contactName: text("contact_name").notNull(),
+    email: text("email").notNull(),
+    phone: text("phone"),
+    reason: text("reason").notNull(),
+    detail: text("detail").notNull(),
+    // pendiente | en_revision | aprobada | rechazada
+    status: text("status").notNull().default("pendiente"),
+    adminNote: text("admin_note"),
+    ip: text("ip"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    updatedBy: text("updated_by").references(() => users.id),
+  },
+  (t) => [index("credit_note_requests_status").on(t.status, t.createdAt), index("credit_note_requests_key").on(t.idKey)],
+);
+
+export type CreditNoteRequest = typeof creditNoteRequests.$inferSelect;
 export type Withdrawal = typeof withdrawals.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type EmissionJob = typeof emissionJobs.$inferSelect;
