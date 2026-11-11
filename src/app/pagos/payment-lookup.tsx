@@ -55,7 +55,7 @@ function CreditNoteBox({ g, doc }: { g: InvoiceGroup; doc: string }) {
 
   if (sent) {
     return (
-      <div className="border-t border-slate-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-900">
+      <div className="mx-4 mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900 sm:mx-5">
         <b>{sent === "ya" ? "Ya tenemos tu solicitud en revisión." : "Recibimos tu solicitud de nota crédito."}</b> Te escribiremos a {f.email} cuando la
         revisemos.
       </div>
@@ -63,9 +63,14 @@ function CreditNoteBox({ g, doc }: { g: InvoiceGroup; doc: string }) {
   }
   if (!open) {
     return (
-      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
-        <p className="text-sm text-slate-700">¿No estás de acuerdo con esta factura?</p>
-        <button onClick={() => setOpen(true)} className="btn-secondary">Solicitar nota crédito</button>
+      <div className="mx-4 mb-4 flex flex-col gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 sm:mx-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="font-semibold text-amber-900">¿No estás de acuerdo con esta factura?</p>
+          <p className="text-sm text-amber-800">Pide una nota crédito y la revisamos.</p>
+        </div>
+        <button onClick={() => setOpen(true)} className="btn w-full shrink-0 bg-amber-500 px-5 py-2.5 text-white hover:bg-amber-600 sm:w-auto">
+          Solicitar nota crédito
+        </button>
       </div>
     );
   }
@@ -79,7 +84,7 @@ function CreditNoteBox({ g, doc }: { g: InvoiceGroup; doc: string }) {
     setSent(r.already ? "ya" : "nueva");
   }
   return (
-    <form onSubmit={submit} className="space-y-3 border-t border-slate-200 bg-slate-50 px-5 py-4">
+    <form onSubmit={submit} className="mx-4 mb-4 space-y-3 rounded-xl border border-amber-300 bg-amber-50/60 p-4 sm:mx-5">
       <div>
         <h3 className="font-semibold">Solicitar nota crédito{g.number ? ` de la factura ${g.number}` : ""}</h3>
         <p className="text-sm text-slate-600">Cuéntanos qué no está bien. Revisamos tu solicitud y te respondemos por correo.</p>
@@ -131,60 +136,86 @@ function GroupCard({ g, doc, open }: { g: InvoiceGroup; doc: string; open: boole
   const last = g.payments[g.payments.length - 1]?.paidAt;
   const title = g.kind === "pendiente" ? "Pagos aún sin factura" : g.kind === "anterior" ? "Pagos facturados anteriormente" : `Factura ${g.number}`;
   return (
-    <details open={open} className="card overflow-hidden p-0">
-      <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-5 py-4 hover:bg-slate-50">
-        <div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-lg font-semibold">{title}</span>
-            {g.kind === "jero" && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Factura electrónica</span>}
-            {g.kind === "anterior" && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">{refsOf(g).length} facturas anteriores</span>}
-            {g.kind === "pendiente" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Por facturar</span>}
-          </div>
-          <div className="mt-1 text-sm text-slate-500">
-            {g.payments.length} {g.payments.length === 1 ? "pago" : "pagos"}
-            {first && ` · del ${shortDay(first)}${last && last !== first ? ` al ${shortDay(last)}` : ""}`}
-            {invoiceDay(g.date) && ` · factura del ${invoiceDay(g.date)}`}
-          </div>
+    <div className="card overflow-hidden p-0">
+      {/* Encabezado siempre visible: la factura, su valor, el PDF y la nota crédito. Los pagos se despliegan abajo. */}
+      <div className="px-4 py-4 sm:px-5">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-lg font-semibold">{title}</span>
+          {g.kind === "jero" && <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-medium text-emerald-800">Factura electrónica</span>}
+          {g.kind === "anterior" && <span className="rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700">{refsOf(g).length} facturas anteriores</span>}
+          {g.kind === "pendiente" && <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">Por facturar</span>}
         </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right">
+        <div className="mt-1 text-sm text-slate-500">
+          {g.payments.length} {g.payments.length === 1 ? "pago" : "pagos"}
+          {first && ` · del ${shortDay(first)}${last && last !== first ? ` al ${shortDay(last)}` : ""}`}
+          {invoiceDay(g.date) && ` · factura del ${invoiceDay(g.date)}`}
+        </div>
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
             <div className="text-xs text-slate-500">Valor de los pagos</div>
-            <div className="text-xl font-semibold tabular-nums">{money(g.total)}</div>
+            <div className="text-2xl font-semibold tabular-nums">{money(g.total)}</div>
           </div>
           {g.invoiceId && (
-            <a href={pdfUrl(g.invoiceId, doc)} target="_blank" rel="noopener" onClick={(e) => e.stopPropagation()} className="btn-primary whitespace-nowrap">
+            <a href={pdfUrl(g.invoiceId, doc)} target="_blank" rel="noopener" className="btn-primary w-full px-5 py-2.5 sm:w-auto">
               Ver factura (PDF)
             </a>
           )}
         </div>
-      </summary>
-      <div className="overflow-x-auto border-t border-slate-200">
-        <table className="table">
-          <thead><tr><th>#</th><th>Fecha y hora del pago</th><th>Pagado por</th><th>Banco</th>{g.kind === "anterior" && <th>Factura</th>}<th className="text-right">Valor</th></tr></thead>
-          <tbody>
-            {g.payments.map((p, i) => (
-              <tr key={`${p.paidAt}-${i}`}>
-                <td className="text-slate-400">{i + 1}</td>
-                <td className="whitespace-nowrap">{when(p.paidAt)}</td>
-                <td>{p.company}</td>
-                <td>{bankLabel(p.bank)}</td>
-                {g.kind === "anterior" && <td className="whitespace-nowrap text-xs">{p.invoices}</td>}
-                <td className="whitespace-nowrap text-right tabular-nums">
-                  {money(p.amount)}
-                  {p.full && <div className="text-xs text-slate-500">parte de un pago de {money(p.full)}</div>}
-                </td>
-              </tr>
-            ))}
-            <tr className="bg-slate-50 font-semibold">
-              <td colSpan={g.kind === "anterior" ? 5 : 4}>Total {g.kind === "pendiente" ? "por facturar" : g.kind === "anterior" ? "facturado anteriormente" : `en la factura ${g.number}`}</td>
-              <td className="whitespace-nowrap text-right tabular-nums">{money(g.total)}</td>
-            </tr>
-          </tbody>
-        </table>
-        {g.kind === "anterior" && <p className="px-5 py-3 text-xs text-slate-500">Estas facturas se emitieron antes; si necesitas una copia, pídela a tu asesor.</p>}
       </div>
       {g.kind !== "pendiente" && <CreditNoteBox g={g} doc={doc} />}
-    </details>
+      <details open={open} className="border-t border-slate-200">
+        <summary className="cursor-pointer px-4 py-3 text-sm font-medium text-brand-700 hover:bg-slate-50 sm:px-5">
+          Ver los {g.payments.length} {g.payments.length === 1 ? "pago" : "pagos"} de {g.kind === "jero" ? "esta factura" : "este grupo"}
+        </summary>
+        {/* Celular: lista (la tabla se cortaba a la derecha). */}
+        <ul className="divide-y divide-slate-100 sm:hidden">
+          {g.payments.map((p, i) => (
+            <li key={`${p.paidAt}-${i}`} className="flex items-start justify-between gap-3 px-4 py-3">
+              <div className="min-w-0">
+                <div className="text-sm font-medium">{i + 1}. {when(p.paidAt)}</div>
+                <div className="text-xs text-slate-500">
+                  {p.company} · {bankLabel(p.bank)}
+                  {g.kind === "anterior" && p.invoices ? ` · ${p.invoices}` : ""}
+                </div>
+              </div>
+              <div className="shrink-0 text-right">
+                <div className="text-sm font-semibold tabular-nums">{money(p.amount)}</div>
+                {p.full && <div className="text-[11px] text-slate-500">parte de {money(p.full)}</div>}
+              </div>
+            </li>
+          ))}
+          <li className="flex justify-between bg-slate-50 px-4 py-3 text-sm font-semibold">
+            <span>Total</span>
+            <span className="tabular-nums">{money(g.total)}</span>
+          </li>
+        </ul>
+        <div className="hidden overflow-x-auto sm:block">
+          <table className="table">
+            <thead><tr><th>#</th><th>Fecha y hora del pago</th><th>Pagado por</th><th>Banco</th>{g.kind === "anterior" && <th>Factura</th>}<th className="text-right">Valor</th></tr></thead>
+            <tbody>
+              {g.payments.map((p, i) => (
+                <tr key={`${p.paidAt}-${i}`}>
+                  <td className="text-slate-400">{i + 1}</td>
+                  <td className="whitespace-nowrap">{when(p.paidAt)}</td>
+                  <td>{p.company}</td>
+                  <td>{bankLabel(p.bank)}</td>
+                  {g.kind === "anterior" && <td className="whitespace-nowrap text-xs">{p.invoices}</td>}
+                  <td className="whitespace-nowrap text-right tabular-nums">
+                    {money(p.amount)}
+                    {p.full && <div className="text-xs text-slate-500">parte de un pago de {money(p.full)}</div>}
+                  </td>
+                </tr>
+              ))}
+              <tr className="bg-slate-50 font-semibold">
+                <td colSpan={g.kind === "anterior" ? 5 : 4}>Total {g.kind === "pendiente" ? "por facturar" : g.kind === "anterior" ? "facturado anteriormente" : `en la factura ${g.number}`}</td>
+                <td className="whitespace-nowrap text-right tabular-nums">{money(g.total)}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        {g.kind === "anterior" && <p className="px-4 py-3 text-xs text-slate-500 sm:px-5">Estas facturas se emitieron antes; si necesitas una copia, pídela a tu asesor.</p>}
+      </details>
+    </div>
   );
 }
 
@@ -236,14 +267,37 @@ export function PaymentLookup() {
           {res.groups.length > 0 && (
             <>
               {/* Primero el resumen: qué facturas tiene y cuánto de sus pagos entró en cada una. */}
-              <div className="card overflow-x-auto p-0">
-                <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4">
+              <div className="card overflow-hidden p-0">
+                <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-4 sm:px-5">
                   <div>
                     <h2 className="text-lg font-semibold">Tus facturas</h2>
                     <p className="text-sm text-slate-500">Cada factura agrupa varios pagos. Abre una factura abajo para ver sus pagos uno por uno.</p>
                   </div>
-                  <button onClick={() => downloadCsv(res, asked)} className="btn-secondary">Descargar en Excel (CSV)</button>
+                  <button onClick={() => downloadCsv(res, asked)} className="btn-secondary w-full sm:w-auto">Descargar en Excel (CSV)</button>
                 </div>
+                {/* Celular: una fila por factura, sin columnas que se corten. */}
+                <ul className="divide-y divide-slate-100 border-t border-slate-200 sm:hidden">
+                  {res.groups.map((g) => (
+                    <li key={g.key} className={`flex items-center justify-between gap-3 px-4 py-3 ${g.kind === "pendiente" ? "text-amber-800" : ""}`}>
+                      <div className="min-w-0">
+                        <div className="font-medium">{g.kind === "pendiente" ? "Por facturar" : g.kind === "anterior" ? "Facturas anteriores" : g.number}</div>
+                        <div className="text-xs text-slate-500">
+                          {g.payments.length} {g.payments.length === 1 ? "pago" : "pagos"}
+                          {invoiceDay(g.date) ? ` · ${invoiceDay(g.date)}` : ""}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <div className="font-semibold tabular-nums">{money(g.total)}</div>
+                        {g.invoiceId && <a href={pdfUrl(g.invoiceId, asked)} target="_blank" rel="noopener" className="text-sm text-brand-700 underline">Ver PDF</a>}
+                      </div>
+                    </li>
+                  ))}
+                  <li className="flex justify-between bg-slate-50 px-4 py-3 font-semibold">
+                    <span>Total</span>
+                    <span className="tabular-nums">{money(res.groups.reduce((s, g) => s + g.total, 0))}</span>
+                  </li>
+                </ul>
+                <div className="hidden sm:block">
                 <table className="table">
                   <thead><tr><th>Factura</th><th>Fecha</th><th className="text-right"># pagos</th><th className="text-right">Valor de los pagos</th><th></th></tr></thead>
                   <tbody>
@@ -286,6 +340,7 @@ export function PaymentLookup() {
                     </tr>
                   </tbody>
                 </table>
+                </div>
               </div>
 
               <div className="space-y-4">
