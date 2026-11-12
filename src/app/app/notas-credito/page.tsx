@@ -46,7 +46,11 @@ export default async function NotasCreditoPage({ searchParams }: { searchParams:
 
   return (
     <>
-      <PageHeader title="Notas crédito" description="Clientes que no están de acuerdo con una factura y pidieron nota crédito desde la consulta de pagos." />
+      <PageHeader
+        title="Notas crédito"
+        description="Clientes que no están de acuerdo con una factura y pidieron nota crédito desde la consulta de pagos."
+        actions={<a className="btn-primary" href={`/api/notas-credito/excel?estado=${estado}`}>Descargar Excel</a>}
+      />
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
         <Stat label="Pendientes" value={n("pendiente")} hint="Sin revisar" />
         <Stat label="En revisión" value={n("en_revision")} />
